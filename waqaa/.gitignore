@@ -1,0 +1,4 @@
+BackEnd/.env
+BackEnd/venv/
+__pycache__/
+*.pycله
