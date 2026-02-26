@@ -1,4 +1,5 @@
 BackEnd/.env
 BackEnd/venv/
 __pycache__/
-*.pycله
+*.pyc
+BackEnd/db.sqlite3
