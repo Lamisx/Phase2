@@ -62,8 +62,8 @@ class _IdScreenState extends State<IdScreen> {
                     decoration: inputDecoration('ادخل رقم الهوية'),
                     validator: (v) {
                       if (v == null || v.isEmpty) return 'رقم الهوية مطلوب';
-                      if (v.length < 10)
-                        return 'رقم الهوية يجب أن يكون 10 أرقام على الأقل';
+                      if (v.length != 10)
+                        return 'رقم الهوية يجب أن يكون 10 أرقام بالضبط';
                       return null;
                     },
                   ),

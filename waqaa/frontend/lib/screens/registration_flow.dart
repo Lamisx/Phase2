@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'id_screen.dart';
 import 'details_screen.dart';
 import 'contact_screen.dart';
+import 'AddTrustDevice.dart';
 
 // ══════════════════════════════════════════════
 //  المنسّق الرئيسي للتسجيل (يتحكم في PageView)
@@ -41,12 +42,16 @@ class _RegistrationFlowState extends State<RegistrationFlow> {
 
   void _nextPage() {
     _pageController.nextPage(
-        duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   void _prevPage() {
     _pageController.previousPage(
-        duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   void _showConfirmationDialog() {
@@ -57,32 +62,42 @@ class _RegistrationFlowState extends State<RegistrationFlow> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: const Color(0xFF252A34),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Row(
             children: [
               Icon(Icons.mark_email_read, color: Color(0xFF2E8B57), size: 28),
               SizedBox(width: 10),
-              Text('تم الإرسال!',
-                  style: TextStyle(color: Colors.white, fontSize: 20)),
+              Text(
+                'تم الإرسال!',
+                style: TextStyle(color: Colors.white, fontSize: 20),
+              ),
             ],
           ),
           content: RichText(
             textDirection: TextDirection.rtl,
             text: TextSpan(
               style: const TextStyle(
-                  color: Colors.white70, fontSize: 14, height: 1.6),
+                color: Colors.white70,
+                fontSize: 14,
+                height: 1.6,
+              ),
               children: [
                 const TextSpan(
-                    text: 'تم إرسال رسالة تأكيد إلى بريدك الإلكتروني\n'),
+                  text: 'تم إرسال رسالة تأكيد إلى بريدك الإلكتروني\n',
+                ),
                 TextSpan(
                   text: _emailController.text,
                   style: const TextStyle(
-                      color: Color(0xFF81C784), fontWeight: FontWeight.bold),
+                    color: Color(0xFF81C784),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const TextSpan(
-                    text:
-                        '\n\nيرجى التحقق من بريدك الوارد والضغط على رابط التأكيد لإتمام التسجيل.'),
+                  text:
+                      '\n\nيرجى التحقق من بريدك الوارد والضغط على رابط التأكيد لإتمام التسجيل.',
+                ),
               ],
             ),
           ),
@@ -93,15 +108,28 @@ class _RegistrationFlowState extends State<RegistrationFlow> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2E8B57),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('حسناً',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  Navigator.of(context).pop();
+
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const GenerateCodeScreen(),
+                    ),
+                  );
+                },
+                child: const Text(
+                  'حسناً',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
           ],
