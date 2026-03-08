@@ -3,7 +3,7 @@ import 'profile_page.dart';
 import 'support_options_page.dart';
 class TrustedDevicesPage extends StatelessWidget {
   const TrustedDevicesPage({super.key});
-
+//
   @override
   Widget build(BuildContext context) {
     const bg = Color(0xFF2E3F47);
