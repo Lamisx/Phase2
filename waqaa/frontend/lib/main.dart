@@ -1,21 +1,19 @@
 import 'package:flutter/material.dart';
-import 'screens/registration_flow.dart';
+import 'screens/login_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(WaqaaApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class WaqaaApp extends StatelessWidget {
+  const WaqaaApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'waqaa',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const RegistrationFlow(),
+      debugShowCheckedModeBanner: false,
+      title: 'Waqaa',
+      home: LoginScreen(),
     );
   }
 }
