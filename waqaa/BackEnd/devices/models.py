@@ -9,17 +9,6 @@
 
 
 
-#هذا يرفع 
-DJANGO_SECRET_KEY=waqa-super-secret-key-change-this-later
-DJANGO_DEBUG=True
-
-DB_NAME=postgres
-DB_USER=postgres
-DB_PASSWORD=RWaqaa090@@
-DB_HOST=db.nbxjvaduhnuicamrocnd.supabase.co
-DB_PORT=5432
-
-
 
 
 import uuid
