@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'id_screen.dart';
 import 'details_screen.dart';
 import 'contact_screen.dart';
-import 'AddTrustDevice.dart';
+//import 'AddTrustDevice.dart';
+import 'trusted_device.dart';
 
 // ══════════════════════════════════════════════
 //  المنسّق الرئيسي للتسجيل (يتحكم في PageView)
@@ -118,7 +119,7 @@ class _RegistrationFlowState extends State<RegistrationFlow> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const GenerateCodeScreen(),
+                      builder: (context) => const TrustedDevicesPage(),
                     ),
                   );
                 },
