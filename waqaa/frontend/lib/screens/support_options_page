@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+// ══════════════════════════════════════════════
+//                   الدعم
+// ══════════════════════════════════════════════
+
 class SupportOptionsPage extends StatefulWidget {
   const SupportOptionsPage({super.key});
 
@@ -80,10 +84,7 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                   ],
                 ),
               ),
-              Container(
-                height: 1.2,
-                color: SupportOptionsPage.lineColor,
-              ),
+              Container(height: 1.2, color: SupportOptionsPage.lineColor),
               Expanded(
                 child: Stack(
                   children: [
@@ -149,7 +150,9 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                             children: [
                               Container(
                                 height: 52,
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
                                 decoration: const BoxDecoration(
                                   color: Color(0xFF1E2C33),
                                   borderRadius: BorderRadius.vertical(
@@ -198,7 +201,9 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                                           ? Alignment.centerRight
                                           : Alignment.centerLeft,
                                       child: Container(
-                                        margin: const EdgeInsets.only(bottom: 10),
+                                        margin: const EdgeInsets.only(
+                                          bottom: 10,
+                                        ),
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 12,
                                           vertical: 10,
@@ -208,9 +213,12 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: msg.isUser
-                                              ? SupportOptionsPage.iconGreen.withOpacity(0.15)
+                                              ? SupportOptionsPage.iconGreen
+                                                    .withOpacity(0.15)
                                               : Colors.white.withOpacity(0.08),
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                         child: Text(
                                           msg.text,
@@ -225,7 +233,12 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                                padding: const EdgeInsets.fromLTRB(
+                                  10,
+                                  8,
+                                  10,
+                                  10,
+                                ),
                                 child: Row(
                                   children: [
                                     IconButton(
@@ -237,18 +250,26 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                                     ),
                                     Expanded(
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFF31444D),
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                         child: TextField(
                                           controller: _controller,
-                                          style: const TextStyle(color: Colors.white),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                          ),
                                           decoration: const InputDecoration(
                                             border: InputBorder.none,
                                             hintText: 'اكتب رسالتك...',
-                                            hintStyle: TextStyle(color: Colors.white54),
+                                            hintStyle: TextStyle(
+                                              color: Colors.white54,
+                                            ),
                                           ),
                                           onSubmitted: (_) => _sendMessage(),
                                         ),
@@ -275,7 +296,9 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                           width: 54,
                           height: 54,
                           decoration: BoxDecoration(
-                            color: SupportOptionsPage.iconGreen.withOpacity(0.12),
+                            color: SupportOptionsPage.iconGreen.withOpacity(
+                              0.12,
+                            ),
                             borderRadius: BorderRadius.circular(18),
                           ),
                           child: const Icon(
@@ -337,11 +360,7 @@ class _SupportTile extends StatelessWidget {
           child: Row(
             children: [
               if (icon != null) ...[
-                Icon(
-                  icon,
-                  color: iconColor,
-                  size: 20,
-                ),
+                Icon(icon, color: iconColor, size: 20),
               ] else ...[
                 const SizedBox(width: 20),
               ],
@@ -366,8 +385,5 @@ class _ChatMessage {
   final String text;
   final bool isUser;
 
-  _ChatMessage({
-    required this.text,
-    required this.isUser,
-  });
+  _ChatMessage({required this.text, required this.isUser});
 }
