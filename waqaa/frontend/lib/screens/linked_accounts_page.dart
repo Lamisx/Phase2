@@ -1,23 +1,17 @@
 import 'package:flutter/material.dart';
 
-
-
-
-
-
-
 // ══════════════════════════════════════════════
-//            الحسابات المرتبطه  
+//            الحسابات المرتبطه
 // ══════════════════════════════════════════════
 
 class LinkedAccountsPage extends StatelessWidget {
   const LinkedAccountsPage({super.key});
 
   Widget build(BuildContext context) {
-    const bg     = Color(0xFF2B3C44);
+    const bg = Color(0xFF2B3C44);
     const divider = Color(0xFF3A4E57);
-    const accent  = Color(0xFF22C55E);
-    const cardBg  = Color(0xFF32474F);
+    const accent = Color(0xFF22C55E);
+    const cardBg = Color(0xFF32474F);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -32,7 +26,9 @@ class LinkedAccountsPage extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: const BoxDecoration(
                 color: Color(0xFF2B3C44),
-                border: Border(bottom: BorderSide(color: Color(0xFF3A4E57), width: 1.5)),
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFF3A4E57), width: 1.5),
+                ),
               ),
               child: Row(
                 children: [
@@ -89,10 +85,7 @@ class _AccountCard extends StatelessWidget {
   final String name;
   final String username;
 
-  const _AccountCard({
-    required this.name,
-    required this.username,
-  });
+  const _AccountCard({required this.name, required this.username});
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +139,10 @@ class _AccountCard extends StatelessWidget {
             children: [
               // نشط على اليمين
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: accent.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),

@@ -9,8 +9,6 @@
 
 
 
-
-
 import uuid
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
@@ -69,12 +67,13 @@ class WaqaUser(models.Model):
     id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     username         = models.TextField(null=True, blank=True, unique=True)
     display_name     = models.TextField(null=True, blank=True)
-    email            = models.TextField(null=True, blank=True)
-    phone            = models.TextField(null=True, blank=True)
-    national_id_hmac = models.TextField(null=True, blank=True)
+    email            = models.TextField(null=True, blank=True,unique=True)
+    phone            = models.TextField(null=True, blank=True,unique=True)
+    national_id_hmac = models.TextField(null=True, blank=True,unique=True)
     status           = models.TextField(default='active', choices=STATUS_CHOICES)
     created_at       = models.DateTimeField(auto_now_add=True)
     updated_at       = models.DateTimeField(auto_now=True)
+    password_hash = models.TextField(null=True, blank=True)
 
     class Meta:
         db_table = 'users'
@@ -298,8 +297,8 @@ class DelegatedAccess(models.Model):
     STATUS_CHOICES    = [('active', 'Active'), ('revoked', 'Revoked')]
 
     id                   = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    primary_org_user     = models.ForeignKey(OrganizationUser, on_delete=models.CASCADE, related_name='delegated_to')
-    delegate_org_user    = models.ForeignKey(OrganizationUser, on_delete=models.CASCADE, related_name='delegated_from')
+    primary_user     = models.ForeignKey(WaqaUser, on_delete=models.CASCADE, related_name='delegated_to')
+    delegate_user    = models.ForeignKey(WaqaUser, on_delete=models.CASCADE, related_name='delegated_from')
     added_via            = models.TextField(choices=ADDED_VIA_CHOICES)
     status               = models.TextField(default='active', choices=STATUS_CHOICES)
     created_at           = models.DateTimeField(auto_now_add=True)
@@ -307,7 +306,7 @@ class DelegatedAccess(models.Model):
 
     class Meta:
         db_table = 'delegated_access'
-        unique_together = [('primary_org_user', 'delegate_org_user')]
+        unique_together = [('primary_user', 'delegate_user')]
 
     def __str__(self):
-        return f"{self.primary_org_user} → {self.delegate_org_user}"
+        return f"{self.primary_user} → {self.delegate_user}"

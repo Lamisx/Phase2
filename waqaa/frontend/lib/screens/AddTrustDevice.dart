@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 // ══════════════════════════════════════════════
-// الواجهه الخامسه
+//  الواجهة الخامسه — رقم الجوال والبريد
 // ══════════════════════════════════════════════
 
 class GenerateCodeScreen extends StatefulWidget {
