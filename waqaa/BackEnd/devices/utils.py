@@ -14,3 +14,9 @@ def hash_national_id(national_id: str) -> str:
         national_id.encode(),
         hashlib.sha256
     ).hexdigest()
+
+
+def hash_api_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+

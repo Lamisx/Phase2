@@ -99,7 +99,7 @@ class OrganizationUser(models.Model):
         db_table = 'organization_users'
         unique_together = [
             ('organization', 'external_user_ref'),
-            ('organization', 'user'),
+            ('organization', 'user'),# u cant have d and o and p two times...
         ]
 
     def __str__(self):
@@ -122,6 +122,7 @@ class Device(models.Model):
     platform        = models.TextField(choices=PLATFORM_CHOICES)
     app_instance_id = models.TextField(null=True, blank=True)
     is_active       = models.BooleanField(default=True)
+    is_primary_device = models.BooleanField(default=False)
     created_at      = models.DateTimeField(auto_now_add=True)
     updated_at      = models.DateTimeField(auto_now=True)
 
@@ -154,6 +155,7 @@ class DeviceKey(models.Model):
 
     class Meta:
         db_table = 'device_keys'
+        unique_together = [('device', 'organization', 'key_purpose')]
 
     def __str__(self):
         return f"{self.device} — {self.key_purpose} ({self.algorithm})"
@@ -179,6 +181,8 @@ class VerificationSession(models.Model):
     organization                = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='sessions')
     org_user                    = models.ForeignKey(OrganizationUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='sessions')
     device                      = models.ForeignKey(Device, on_delete=models.SET_NULL, null=True, blank=True, related_name='sessions')
+    verified_by_user            = models.ForeignKey( WaqaUser, on_delete=models.SET_NULL, null=True,blank=True, related_name="verified_sessions",)##هل التحقق تم بواسطة الـ primary؟
+    verified_by_actor_type      = models.TextField(choices=[("primary", "Primary"), ("delegate", "Delegate")],null=True,blank=True)# for audit
     org_operation_ref           = models.TextField()
     operation_type              = models.TextField()
     operation_hash              = models.TextField(null=True, blank=True)
@@ -194,6 +198,7 @@ class VerificationSession(models.Model):
     failure_reason              = models.TextField(null=True, blank=True)
     created_at                  = models.DateTimeField(auto_now_add=True)
     expires_at                  = models.DateTimeField()
+    
 
     class Meta:
         db_table = 'verification_sessions'

@@ -1,8 +1,11 @@
 from rest_framework import serializers
-from .models import WaqaUser, Device,DelegatedAccess
+from .models import WaqaUser, Device,DelegatedAccess,VerificationSession,DeviceKey
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.hashers import check_password
 from .utils import hash_national_id
+from rest_framework import serializers
+
+
 
    #------------
     # auth
@@ -189,7 +192,81 @@ class AddDelegateSerializer(serializers.Serializer):
 
         return delegation
 
+#------------------------
+# session& challenge endpoint
+#------------------------
+
+class CreateSessionSerializer(serializers.Serializer):
+
+    organization_api_key = serializers.CharField(required=True)
+    external_user_ref = serializers.CharField(required=True)
+    org_operation_ref = serializers.CharField(required=True)
+    operation_type = serializers.CharField(required=True)
+
+
+class VerifySessionSerializer(serializers.Serializer):
+
+    device_id = serializers.UUIDField()
+    signature = serializers.CharField()
+
+
+    #-----------
+    # the لب
+    #-----------
+
+class DeviceKeyCreateSerializer(serializers.Serializer):
+
+    organization_id = serializers.UUIDField()
+
+    public_key = serializers.CharField()
+
+    algorithm = serializers.ChoiceField(choices=["Ed25519"])# نوع الخوارزميه المستعمله للنحدي
+
+    key_format = serializers.ChoiceField(choices=["RAW"])
+
+    key_purpose = serializers.ChoiceField(choices=["auth"]  )
+    
+# للمنظمه تعرف حاله السيشن
+class SessionStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VerificationSession
+        fields = [
+            "id",
+            "status",
+            "operation_type",
+            "org_operation_ref",
+            "verified_at",
+            "expires_at",
+            "failure_reason",
+        ]
+
+
+class RegisterDeviceKeySerializer(serializers.Serializer):
+    device_id = serializers.UUIDField()
+    organization_id = serializers.UUIDField()
+    public_key = serializers.CharField()
+    algorithm = serializers.ChoiceField(choices=["Ed25519"])
+    key_format = serializers.ChoiceField(choices=["RAW"])
+
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model  = WaqaUser
         fields = ['id', 'username', 'display_name', 'email', 'phone', 'status', 'created_at']
+
+#------------------
+#
+#------------------
+class DeviceKeySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeviceKey
+        fields = [
+            "id",
+            "organization",
+            "key_purpose",
+            "algorithm",
+            "key_format",
+            "is_active",
+            "created_at",
+            "revoked_at",
+            "revocation_reason",
+        ]

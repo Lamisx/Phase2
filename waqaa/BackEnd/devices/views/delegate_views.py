@@ -20,7 +20,7 @@ def create_delegate(request):
             "delegate": DelegateSerializer(delegation).data
         },
         status=status.HTTP_201_CREATED
-    )
+    )#
 
 
 @api_view(["GET"])

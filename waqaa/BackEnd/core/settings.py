@@ -24,11 +24,7 @@ load_dotenv()
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-dev-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
 
-<<<<<<< HEAD
-ALLOWED_HOSTS = []
-=======
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
->>>>>>> 3f26cd8 (backend: auth, devices, delegates APIs + project restructure)
 
 # Application definition
 
