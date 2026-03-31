@@ -3,10 +3,7 @@ import 'profile_page.dart';
 import 'support_options_page.dart';
 import 'AddTrustDevice.dart';
 import 'linked_accounts_page.dart';
-
-// ══════════════════════════════════════════════
-//                الواجهة الرابعه
-// ══════════════════════════════════════════════
+import 'login_screen.dart';
 
 class TrustedDevicesPage extends StatelessWidget {
   const TrustedDevicesPage({super.key});
@@ -154,7 +151,15 @@ class TrustedDevicesPage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => LoginScreen(),
+                          ),
+                          (route) => false,
+                        );
+                      },
                       child: const Text(
                         "تسجيل الخروج",
                         style: TextStyle(
