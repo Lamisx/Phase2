@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'registration_flow.dart';
+import 'details_screen.dart';
+import 'contact_screen.dart';
+import 'trusted_device.dart';
 
 class NafathScreen extends StatefulWidget {
   const NafathScreen({super.key});
@@ -21,7 +23,103 @@ class _NafathScreenState extends State<NafathScreen> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => RegistrationFlow()),
+          MaterialPageRoute(
+            builder: (context) => DetailsScreen(
+              formKey: GlobalKey<FormState>(),
+              usernameController: TextEditingController(),
+              passwordController: TextEditingController(),
+              confirmPasswordController: TextEditingController(),
+              onNext: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ContactScreen(
+                      formKey: GlobalKey<FormState>(),
+                      phoneController: TextEditingController(),
+                      emailController: TextEditingController(),
+                      onSubmit: () {
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => Directionality(
+                            textDirection: TextDirection.rtl,
+                            child: AlertDialog(
+                              backgroundColor: const Color(0xFF252A34),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              title: const Row(
+                                children: [
+                                  Icon(
+                                    Icons.mark_email_read,
+                                    color: Color(0xFF2E8B57),
+                                    size: 28,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text(
+                                    'تم الإرسال!',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              content: const Text(
+                                'تم إرسال رسالة تأكيد إلى بريدك الإلكتروني\n\nيرجى التحقق من بريدك الوارد والضغط على رابط التأكيد لإتمام التسجيل.',
+                                textDirection: TextDirection.rtl,
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                  height: 1.6,
+                                ),
+                              ),
+                              actions: [
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF2E8B57),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 14,
+                                      ),
+                                    ),
+                                    onPressed: () {
+                                      Navigator.of(context).pop();
+                                      Navigator.pushReplacement(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const TrustedDevicesPage(),
+                                        ),
+                                      );
+                                    },
+                                    child: const Text(
+                                      'حسناً',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      onBack: () => Navigator.pop(context),
+                    ),
+                  ),
+                );
+              },
+              onBack: () => Navigator.pop(context),
+            ),
+          ),
         );
       }
     });

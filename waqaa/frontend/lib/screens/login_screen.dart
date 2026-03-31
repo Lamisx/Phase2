@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'nafath_screen.dart';
+import 'id_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -133,7 +134,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       GestureDetector(
-                        onTap: () {},
+                        onTap: () {
+                          final formKey = GlobalKey<FormState>();
+                          final idCtrl = TextEditingController();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => IdScreen(
+                                formKey: GlobalKey<FormState>(),
+                                idController: TextEditingController(),
+                                onNext: () {},
+                              ),
+                            ),
+                          );
+                        },
                         child: const Text(
                           'إنشاء حساب جديد',
                           style: TextStyle(
