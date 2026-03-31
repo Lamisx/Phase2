@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-
+import 'dart:async';
+import 'dart:math';
 // ══════════════════════════════════════════════
-//  الواجهة الخامسه — رقم الجوال والبريد
+//  اضافة الأجهزه الموثوقه
 // ══════════════════════════════════════════════
 
 class GenerateCodeScreen extends StatefulWidget {
@@ -13,8 +14,35 @@ class GenerateCodeScreen extends StatefulWidget {
 
 class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
   bool isPressed = false;
+  List<int> generatedCode = [];
+  Timer? _timer;
+  int _secondsLeft = 120;
+  bool codeVisible = false;
+
+  void _generateCode() {
+    _timer?.cancel();
+    final random = Random();
+    setState(() {
+      generatedCode = List.generate(6, (_) => random.nextInt(10));
+      _secondsLeft = 120;
+      codeVisible = true;
+    });
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_secondsLeft <= 1) {
+        _generateCode(); // يجدد تلقائياً بعد دقيقتين
+      } else {
+        setState(() => _secondsLeft--);
+      }
+    });
+  }
 
   @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -135,7 +163,13 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
+<<<<<<< HEAD
                         onPressed: () {},
+=======
+
+                        onPressed: _generateCode,
+
+>>>>>>> fec5912 (Update: modify UI screen generate random numbers for adding a device>)
                         child: const Text(
                           "توليد الرمز",
                           style: TextStyle(
@@ -146,6 +180,48 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
                         ),
                       ),
                     ),
+                    if (codeVisible) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: generatedCode
+                            .map(
+                              (digit) => Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF23AB49),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '$digit',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'ينتهي خلال ${_secondsLeft ~/ 60}:${(_secondsLeft % 60).toString().padLeft(2, '0')}',
+                        style: const TextStyle(color: Colors.red, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'أدخل هذا الرمز على جهازك الجديد لإكمال التسجيل.',
+                        style: TextStyle(
+                          color: Color(0xFFAECCDD),
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ],
                 ),
               ),
