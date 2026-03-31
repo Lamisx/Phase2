@@ -106,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => NafathScreen(),
+                            builder: (context) => NafathScreen(isLogin: true),
                           ),
                         );
                       },
