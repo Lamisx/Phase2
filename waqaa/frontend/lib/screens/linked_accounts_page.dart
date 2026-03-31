@@ -32,14 +32,21 @@ class LinkedAccountsPage extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  // سهم رجوع على اليمين
+                  // ✅ سهم مطابق لباقي الشاشات (يمين + أخضر + اتجاه صحيح)
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_forward_ios, size: 20),
-                    color: accent,
+                    icon: const Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Icon(
+                        Icons.arrow_forward,
+                        color: Color(0xFF22C55E),
+                      ),
+                    ),
                     splashRadius: 20,
                   ),
+
                   const Spacer(),
+
                   const Text(
                     'الحسابات المرتبطة',
                     style: TextStyle(
@@ -48,8 +55,10 @@ class LinkedAccountsPage extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+
                   const Spacer(),
-                  const SizedBox(width: 44), // توازن
+
+                  const SizedBox(width: 44), // توازن التصميم
                 ],
               ),
             ),
@@ -102,7 +111,7 @@ class _AccountCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // أيقونة + اسم (الأيقونة أول على اليمين)
+          // أيقونة + اسم
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -133,11 +142,11 @@ class _AccountCard extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // حذف + نشط
+          // نشط + حذف
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // نشط على اليمين
+              // نشط
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -158,7 +167,7 @@ class _AccountCard extends StatelessWidget {
                 ),
               ),
 
-              // حذف على اليسار
+              // حذف
               GestureDetector(
                 onTap: () {},
                 child: const Text(

@@ -26,17 +26,19 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
           elevation: 0,
           centerTitle: true,
 
-          actions: [
-            Directionality(
-              textDirection: TextDirection.ltr,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Color(0xFF3B8550)),
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-              ),
+          // إلغاء السهم الافتراضي
+          automaticallyImplyLeading: false,
+
+          // ✅ سهم يمين أخضر واتجاه صحيح
+          leading: Directionality(
+            textDirection: TextDirection.ltr, // يمنع الانعكاس
+            child: IconButton(
+              icon: const Icon(Icons.arrow_forward, color: Color(0xFF3B8550)),
+              onPressed: () {
+                Navigator.pop(context);
+              },
             ),
-          ],
+          ),
 
           title: const Text(
             "إضافة جهاز موثوق",
@@ -83,9 +85,7 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
                           color: Color(0xFF85FC6E),
                           size: 26,
                         ),
-
                         SizedBox(width: 12),
-
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -98,9 +98,7 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-
                               SizedBox(height: 6),
-
                               Text(
                                 "إنشاء رمز آمن لتسجيل جهاز جديد.",
                                 style: TextStyle(
@@ -137,9 +135,7 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-
                         onPressed: () {},
-
                         child: const Text(
                           "توليد الرمز",
                           style: TextStyle(
@@ -162,7 +158,6 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
                   Expanded(
                     child: Divider(color: Color(0xFF23AB49), thickness: 1),
                   ),
-
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 14),
                     child: Text(
@@ -174,7 +169,6 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
                       ),
                     ),
                   ),
-
                   Expanded(
                     child: Divider(color: Color(0xFF23AB49), thickness: 1),
                   ),
@@ -191,16 +185,13 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
 
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
-
                   padding: const EdgeInsets.all(18),
 
                   decoration: BoxDecoration(
                     color: isPressed
                         ? const Color(0xFF536A74)
                         : const Color(0xFF536976),
-
                     borderRadius: BorderRadius.circular(14),
-
                     boxShadow: const [
                       BoxShadow(
                         color: Colors.black45,
@@ -218,9 +209,7 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
                         color: Color(0xFF85FC6E),
                         size: 26,
                       ),
-
                       SizedBox(width: 12),
-
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -233,9 +222,7 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-
                             SizedBox(height: 6),
-
                             Text(
                               "هل لديك رمز تحقق تم إنشاؤه على هذا الجهاز.",
                               style: TextStyle(
