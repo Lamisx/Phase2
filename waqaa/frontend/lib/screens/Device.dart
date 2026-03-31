@@ -76,7 +76,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
           child: Column(
             children: [
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
 
               const Text(
                 "إضافة جهاز بالرمز",
@@ -94,46 +94,56 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                 style: TextStyle(color: Color(0xFFAECCDD), fontSize: 13),
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 25),
 
               /// OTP BOXES
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.center,
+                textDirection: TextDirection.ltr, // ✅ مهم لترتيب الخانات
                 children: List.generate(6, (index) {
-                  return SizedBox(
-                    width: 45,
-                    height: 50,
-                    child: TextField(
-                      controller: controllers[index],
-                      focusNode: focusNodes[index],
-                      onChanged: (value) => onChanged(value, index),
-                      textAlign: TextAlign.center,
-                      keyboardType: TextInputType.number,
-                      maxLength: 1,
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: SizedBox(
+                      width: 45,
+                      height: 50,
+                      child: Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: TextField(
+                          controller: controllers[index],
+                          focusNode: focusNodes[index],
+                          onChanged: (value) => onChanged(value, index),
 
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                          textAlign: TextAlign.center,
+                          textDirection: TextDirection.ltr, // ✅ الحل النهائي
 
-                      decoration: InputDecoration(
-                        counterText: "",
-                        filled: true,
-                        fillColor: const Color(0xFF536976),
+                          keyboardType: TextInputType.number,
+                          maxLength: 1,
 
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF3B8550),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
-                        ),
 
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF85FC6E),
-                            width: 2,
+                          decoration: InputDecoration(
+                            counterText: "",
+                            filled: true,
+                            fillColor: const Color(0xFF536976),
+
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF3B8550),
+                              ),
+                            ),
+
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF85FC6E),
+                                width: 2,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -142,7 +152,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                 }),
               ),
 
-              const SizedBox(height: 50),
+              const SizedBox(height: 35),
 
               /// BUTTON
               Container(
