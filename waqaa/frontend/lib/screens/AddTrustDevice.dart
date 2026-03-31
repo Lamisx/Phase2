@@ -163,13 +163,9 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-<<<<<<< HEAD
-                        onPressed: () {},
-=======
 
                         onPressed: _generateCode,
 
->>>>>>> fec5912 (Update: modify UI screen generate random numbers for adding a device>)
                         child: const Text(
                           "توليد الرمز",
                           style: TextStyle(
@@ -190,7 +186,7 @@ class _GenerateCodeScreenState extends State<GenerateCodeScreen> {
                                 width: 42,
                                 height: 42,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF23AB49),
+                                  color: const Color(0xFF3B8550),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 alignment: Alignment.center,
