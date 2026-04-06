@@ -3,3 +3,4 @@ BackEnd/venv/
 __pycache__/
 *.pyc
 BackEnd/db.sqlite3
+frontend/android/build/
