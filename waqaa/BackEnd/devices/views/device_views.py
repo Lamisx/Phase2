@@ -4,7 +4,7 @@ from rest_framework import status
 from ..models import Device, WaqaUser,Organization,DeviceKey
 from ..serializers import DeviceCreateSerializer, DeviceSerializer,RegisterDeviceKeySerializer
 
-
+#هل هنا مفترض يكون اتخاذ القرار ؟ لاني اشوف خطا يكون هنا 
 @api_view(["POST"])
 def access_decision(request):
 
