@@ -23,4 +23,6 @@ urlpatterns = [
     path("api/accounts/", include("accounts_endpoints.urls")),
     path("api/devices/", include("devices_endpoints.urls")),
     path("api/organizations/", include("organization_endpoints.urls")),
+    path("api/verification/", include("verification_endpoint.urls")),
+
 ]

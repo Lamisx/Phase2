@@ -1,0 +1,263 @@
+import json
+import secrets
+from datetime import timedelta
+
+from django.utils import timezone
+from django.db import transaction
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+
+from .models import (
+    VerificationSession,
+    VerificationChallenge,
+    AuditLog,
+    KeyUsageLog,
+)
+
+from .serializers import (
+    CreateSessionSerializer,
+    VerifySessionSerializer,
+    SessionStatusSerializer,
+)
+
+from accounts_endpoints.models import WaqaUser, DelegatedAccess
+from organization_endpoints.models import Organization, OrganizationApiKey, OrganizationUser
+from devices_endpoints.models import Device, DeviceKey
+
+from core.utils import hash_api_key
+from core.utils_crypto import verify_ed25519_signature
+
+
+# ============================================================
+# Create Session
+# ============================================================
+
+@api_view(["POST"])
+def create_session(request):
+
+    serializer = CreateSessionSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    org_key           = serializer.validated_data["organization_api_key"]
+    external_user_ref = serializer.validated_data["external_user_ref"]
+    org_operation_ref = serializer.validated_data["org_operation_ref"]
+    operation_type    = serializer.validated_data["operation_type"]
+
+    # 1 - تحقق من الـ API Key
+    try:
+        key_hash = hash_api_key(org_key)
+        api_key  = OrganizationApiKey.objects.get(key_hash=key_hash, is_active=True)
+    except OrganizationApiKey.DoesNotExist:
+        return Response({"error": "INVALID_API_KEY"}, status=status.HTTP_401_UNAUTHORIZED)
+
+    organization = api_key.organization
+
+    # 2 - تحقق من المستخدم
+    try:
+        org_user = OrganizationUser.objects.get(
+            organization=organization,
+            external_user_ref=external_user_ref,
+            status="linked"
+        )
+    except OrganizationUser.DoesNotExist:
+        return Response({"error": "USER_NOT_FOUND"}, status=status.HTTP_404_NOT_FOUND)
+
+    # 3 - تحقق من تكرار العملية
+    if VerificationSession.objects.filter(
+        organization=organization,
+        org_operation_ref=org_operation_ref
+    ).exists():
+        return Response({"error": "OPERATION_ALREADY_EXISTS"}, status=status.HTTP_409_CONFLICT)
+
+    # 4 - أنشئ الجلسة
+    expires_at = timezone.now() + timedelta(minutes=2)
+
+    session = VerificationSession.objects.create(
+        organization=organization,
+        org_user=org_user,
+        org_operation_ref=org_operation_ref,
+        operation_type=operation_type,
+        nonce=secrets.token_hex(16),
+        status="challenge_issued",
+        expires_at=expires_at
+    )
+
+    # 5 - أنشئ التحدي
+    challenge_payload = {
+        "session_id": str(session.id),
+        "nonce": secrets.token_hex(32),
+        "expires_at": expires_at.isoformat()
+    }
+
+    challenge_bytes = json.dumps(
+        challenge_payload,
+        sort_keys=True,
+        separators=(",", ":")
+    )
+
+    challenge = VerificationChallenge.objects.create(
+        session=session,
+        challenge_bytes=challenge_bytes,
+        attempt_number=1,
+        expires_at=expires_at
+    )
+
+    return Response({
+        "message": "SESSION_CREATED",
+        "session_id": str(session.id),
+        "challenge": challenge_payload,
+        "status": "challenge_issued",
+        "expires_at": expires_at
+    }, status=status.HTTP_201_CREATED)
+
+
+# ============================================================
+# Verify Session
+# ============================================================
+
+@api_view(['POST'])
+@transaction.atomic
+def verify_session(request, session_id):
+
+    challenge_id = request.data.get("challenge_id")
+    signature    = request.data.get("signature")
+    device_id    = request.data.get("device_id")
+
+    try:
+        session   = VerificationSession.objects.select_for_update().get(id=session_id)
+        challenge = VerificationChallenge.objects.get(id=challenge_id, session=session)
+
+        # 1 - انتهاء الجلسة
+        if session.expires_at < timezone.now():
+            return Response({"error": "SESSION_EXPIRED"}, status=400)
+
+        # 2 - تحقق من التحدي
+        if not challenge.is_active or challenge.is_used:
+            return Response({"error": "INVALID_CHALLENGE"}, status=400)
+
+        if challenge.expires_at < timezone.now():
+            return Response({"error": "CHALLENGE_EXPIRED"}, status=400)
+
+        # 3 - الجهاز
+        device = Device.objects.get(id=device_id, is_active=True)
+
+        # 4 - primary vs delegate
+        if device.user_id == session.org_user.user_id:
+            actor_type = "primary"
+        else:
+            is_delegate = DelegatedAccess.objects.filter(
+                primary_user_id=session.org_user.user_id,
+                delegate_user_id=device.user_id,
+                status='active'
+            ).exists()
+
+            if not is_delegate:
+                return Response({"error": "NOT_AUTHORIZED"}, status=403)
+
+            actor_type = "delegate"
+
+        # 5 - المفتاح
+        device_key = DeviceKey.objects.get(
+            device=device,
+            organization=session.organization,
+            is_active=True
+        )
+
+        # 6 - التحقق من التوقيع
+        is_valid = verify_ed25519_signature(
+            public_key_b64=device_key.public_key,
+            message=challenge.challenge_bytes,
+            signature_b64=signature
+        )
+
+        if is_valid:
+            challenge.is_used   = True
+            challenge.is_active = False
+            challenge.used_at   = timezone.now()
+            challenge.save()
+
+            session.status                 = "verified"
+            session.verified_at            = timezone.now()
+            session.device_id              = device.id
+            session.verified_by_user       = device.user
+            session.verified_by_actor_type = actor_type
+            session.save()
+
+            return Response({"status": "verified"})
+
+        else:
+            session.attempt_count += 1
+
+            if session.attempt_count >= session.max_attempts:
+                session.status         = "failed"
+                session.failure_reason = "max_attempts_reached"
+
+            session.save()
+
+            return Response({"error": "INVALID_SIGNATURE"}, status=400)
+
+    except VerificationSession.DoesNotExist:
+        return Response({"error": "SESSION_NOT_FOUND"}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+
+# ============================================================
+# Get Session Status
+# ============================================================
+
+@api_view(["GET"])
+def get_session_status(request, session_id):
+    try:
+        session = VerificationSession.objects.get(id=session_id)
+    except VerificationSession.DoesNotExist:
+        return Response({"error": "SESSION_NOT_FOUND"}, status=status.HTTP_404_NOT_FOUND)
+
+    if session.status in ["pending", "challenge_issued", "awaiting_user"] and session.expires_at < timezone.now():
+        session.status         = "expired"
+        session.failure_reason = "session_expired"
+        session.save()
+
+    serializer = SessionStatusSerializer(session)
+
+    return Response({
+        "session_id":        str(session.id),
+        "status":            serializer.data["status"],
+        "operation_type":    serializer.data["operation_type"],
+        "org_operation_ref": serializer.data["org_operation_ref"],
+        "verified_at":       serializer.data["verified_at"],
+        "expires_at":        serializer.data["expires_at"],
+        "failure_reason":    serializer.data["failure_reason"],
+    }, status=status.HTTP_200_OK)
+
+
+# ============================================================
+# Cancel Session
+# ============================================================
+
+@api_view(["POST"])
+@transaction.atomic
+def cancel_session(request, session_id):
+    try:
+        session = VerificationSession.objects.select_for_update().get(id=session_id)
+    except VerificationSession.DoesNotExist:
+        return Response({"error": "SESSION_NOT_FOUND"}, status=status.HTTP_404_NOT_FOUND)
+
+    if session.status in ["verified", "failed", "expired", "cancelled", "denied"]:
+        return Response({"error": "SESSION_ALREADY_FINALIZED"}, status=status.HTTP_400_BAD_REQUEST)
+
+    VerificationChallenge.objects.filter(
+        session=session,
+        is_active=True
+    ).update(is_active=False)
+
+    session.status         = "cancelled"
+    session.failure_reason = "session_cancelled"
+    session.save()
+
+    return Response({
+        "message":    "SESSION_CANCELLED",
+        "session_id": str(session.id)
+    }, status=status.HTTP_200_OK)

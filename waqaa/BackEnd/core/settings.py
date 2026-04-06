@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'accounts_endpoints',
     'devices_endpoints',
     'organization_endpoints'
+    'verification_endpoint',
 ]
 
 MIDDLEWARE = [

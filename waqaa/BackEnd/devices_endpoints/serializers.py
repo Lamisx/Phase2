@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AuditLog, Device, DeviceKey, DeviceRevocationLog, KeyUsageLog, VerificationSession, VerificationChallenge
+from .models import AuditLog, Device, DeviceKey, DeviceRevocationLog
 from waqaa.BackEnd.accounts_endpoints.serializers import UserSerializer
 from waqaa.BackEnd.organization_endpoints.serializers import OrganizationSerializer, OrganizationUserSerializer
 
@@ -84,47 +84,10 @@ class RegisterDeviceKeySerializer(serializers.Serializer):
     public_key = serializers.CharField()
     algorithm = serializers.ChoiceField(choices=["Ed25519"])
     key_format = serializers.ChoiceField(choices=["RAW"])
-    
-#------------------------
-# session& challenge endpoint
-#------------------------
-
-class CreateSessionSerializer(serializers.Serializer):
-
-    organization_api_key = serializers.CharField(required=True)
-    external_user_ref = serializers.CharField(required=True)
-    org_operation_ref = serializers.CharField(required=True)
-    operation_type = serializers.CharField(required=True)
-
-
-class VerifySessionSerializer(serializers.Serializer):
-
-
-    device_id = serializers.UUIDField()
-    signature = serializers.CharField()
-
-
-    #-----------
-    # the لب
-    #-----------
-
-# ------------------------
-# Logs اضافه gpt
-# ------------------------
+ 
 
 class DeviceRevocationLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeviceRevocationLog
         fields = '__all__'
 
-
-class AuditLogSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AuditLog
-        fields = '__all__'
-
-
-class KeyUsageLogSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = KeyUsageLog
-        fields = '__all__'
