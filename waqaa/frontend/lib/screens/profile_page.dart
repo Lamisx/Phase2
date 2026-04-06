@@ -32,10 +32,25 @@ class ProfilePage extends StatelessWidget {
                   bottom: BorderSide(color: Color(0xFF3A4E57), width: 1.5),
                 ),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Spacer(),
-                  Text(
+                  // ✅ السهم في اليمين (مع منع الانعكاس)
+                  IconButton(
+                    icon: const Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Icon(
+                        Icons.arrow_forward,
+                        color: Color(0xFF22C55E),
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                  ),
+
+                  const Spacer(),
+
+                  const Text(
                     'الملف الشخصي',
                     style: TextStyle(
                       color: Colors.white,
@@ -43,7 +58,8 @@ class ProfilePage extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  Spacer(),
+
+                  const Spacer(),
                 ],
               ),
             ),

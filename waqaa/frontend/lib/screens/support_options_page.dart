@@ -53,13 +53,26 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
         body: SafeArea(
           child: Column(
             children: [
+              // ===== Header =====
               Container(
                 height: 58,
                 color: SupportOptionsPage.headerBg,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
                   children: [
-                    const SizedBox(width: 40),
+                    // ✅ السهم في اليمين
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Icon(
+                          Icons.arrow_forward,
+                          color: Color(0xFF22C55E),
+                        ),
+                      ),
+                      splashRadius: 20,
+                    ),
+
                     const Expanded(
                       child: Center(
                         child: Text(
@@ -72,19 +85,14 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                         ),
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
-                        Icons.arrow_forward_ios,
-                        color: Color.fromARGB(255, 25, 92, 52),
-                        size: 24,
-                      ),
-                      splashRadius: 20,
-                    ),
+
+                    const SizedBox(width: 40), // توازن التصميم
                   ],
                 ),
               ),
+
               Container(height: 1.2, color: SupportOptionsPage.lineColor),
+
               Expanded(
                 child: Stack(
                   children: [
@@ -104,20 +112,25 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                             ),
                           ),
                           const SizedBox(height: 22),
+
                           _SupportTile(
                             title: 'الأسئلة الشائعة',
                             icon: Icons.keyboard_arrow_down,
                             iconColor: SupportOptionsPage.iconSoft,
                             onTap: () {},
                           ),
+
                           const SizedBox(height: 18),
+
                           _SupportTile(
                             title: 'الشروط والأحكام',
                             icon: Icons.keyboard_arrow_down,
                             iconColor: SupportOptionsPage.iconSoft,
                             onTap: () {},
                           ),
+
                           const SizedBox(height: 18),
+
                           _SupportTile(
                             title: 'اتصل بنا',
                             icon: null,
@@ -128,6 +141,7 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                       ),
                     ),
 
+                    // ===== Chat Box =====
                     if (_chatOpen)
                       Positioned(
                         left: 18,
@@ -172,7 +186,6 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                                         color: Colors.white70,
                                         size: 20,
                                       ),
-                                      splashRadius: 18,
                                     ),
                                     const Expanded(
                                       child: Center(
@@ -190,6 +203,7 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                                   ],
                                 ),
                               ),
+
                               Expanded(
                                 child: ListView.builder(
                                   padding: const EdgeInsets.all(12),
@@ -232,6 +246,7 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                                   },
                                 ),
                               ),
+
                               Container(
                                 padding: const EdgeInsets.fromLTRB(
                                   10,
@@ -283,6 +298,7 @@ class _SupportOptionsPageState extends State<SupportOptionsPage> {
                         ),
                       ),
 
+                    // ===== Floating Chat Button =====
                     Positioned(
                       left: 18,
                       bottom: 26,
@@ -359,11 +375,10 @@ class _SupportTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              if (icon != null) ...[
-                Icon(icon, color: iconColor, size: 20),
-              ] else ...[
+              if (icon != null)
+                Icon(icon, color: iconColor, size: 20)
+              else
                 const SizedBox(width: 20),
-              ],
               const Spacer(),
               Text(
                 title,

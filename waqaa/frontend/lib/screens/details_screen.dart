@@ -44,8 +44,9 @@ class _DetailsScreenState extends State<DetailsScreen> {
     final hasUppercase = RegExp(r'[A-Z]').hasMatch(password);
     final hasLowercase = RegExp(r'[a-z]').hasMatch(password);
     final hasDigits = RegExp(r'[0-9]').hasMatch(password);
-    final hasSpecialChars =
-        RegExp(r'[!@#\$%^&*(),.?":{}|<>]').hasMatch(password);
+    final hasSpecialChars = RegExp(
+      r'[!@#\$%^&*(),.?":{}|<>]',
+    ).hasMatch(password);
 
     if (!(hasUppercase && hasLowercase && hasDigits && hasSpecialChars)) {
       setState(() {
@@ -70,135 +71,146 @@ class _DetailsScreenState extends State<DetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        buildWaveHeader(context),
-        SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Form(
-              key: widget.formKey,
-              child: Column(
-                textDirection: TextDirection.rtl,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 10),
-                  buildBackButton(widget.onBack),
-                  const SizedBox(height: 30),
-                  const Text(
-                    'تسجيل البيانات',
-                    textDirection: TextDirection.rtl,
-                    style: TextStyle(
+    return Scaffold(
+      backgroundColor: const Color(0xFF1C2B33),
+      body: Stack(
+        children: [
+          buildWaveHeader(context),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Form(
+                key: widget.formKey,
+                child: Column(
+                  textDirection: TextDirection.rtl,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 10),
+                    buildBackButton(widget.onBack),
+                    const SizedBox(height: 30),
+                    const Text(
+                      'تسجيل البيانات',
+                      textDirection: TextDirection.rtl,
+                      style: TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'إنشاء اسم المستخدم و كلمة مرور قوية باستخدام مزيج من الأحرف والأرقام والرموز',
-                    textDirection: TextDirection.rtl,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(fontSize: 12, color: Color(0xFF81C784)),
-                  ),
-                  const SizedBox(height: 30),
-                  fieldLabel('اسم المستخدم'),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: widget.usernameController,
-                    textAlign: TextAlign.right,
-                    textDirection: TextDirection.ltr,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'[a-zA-Z0-9_]')),
-                    ],
-                    decoration: inputDecoration('ادخل اسم المستخدم'),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'اسم المستخدم مطلوب';
-                      if (v.contains(' '))
-                        return 'لا يُسمح بالمسافات في اسم المستخدم';
-                      if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(v))
-                        return 'اسم المستخدم يجب أن يكون بالإنجليزية فقط';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  fieldLabel('كلمة المرور'),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: widget.passwordController,
-                    obscureText: _obscurePassword,
-                    textAlign: TextAlign.right,
-                    textDirection: TextDirection.rtl,
-                    onChanged: _checkPasswordStrength,
-                    decoration: inputDecoration('ادخل كلمة المرور').copyWith(
-                      suffixIcon: IconButton(
-                        icon: Icon(
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'إنشاء اسم المستخدم و كلمة مرور قوية باستخدام مزيج من الأحرف والأرقام والرموز',
+                      textDirection: TextDirection.rtl,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(fontSize: 12, color: Color(0xFF81C784)),
+                    ),
+                    const SizedBox(height: 30),
+                    fieldLabel('اسم المستخدم'),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: widget.usernameController,
+                      textAlign: TextAlign.right,
+                      textDirection: TextDirection.ltr,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'[a-zA-Z0-9_]'),
+                        ),
+                      ],
+                      decoration: inputDecoration('ادخل اسم المستخدم'),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'اسم المستخدم مطلوب';
+                        if (v.contains(' '))
+                          return 'لا يُسمح بالمسافات في اسم المستخدم';
+                        if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(v))
+                          return 'اسم المستخدم يجب أن يكون بالإنجليزية فقط';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    fieldLabel('كلمة المرور'),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: widget.passwordController,
+                      obscureText: _obscurePassword,
+                      textAlign: TextAlign.right,
+                      textDirection: TextDirection.rtl,
+                      onChanged: _checkPasswordStrength,
+                      decoration: inputDecoration('ادخل كلمة المرور').copyWith(
+                        suffixIcon: IconButton(
+                          icon: Icon(
                             _obscurePassword
                                 ? Icons.visibility_off
                                 : Icons.visibility,
-                            color: Colors.white38),
-                        onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword),
+                            color: Colors.white38,
+                          ),
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                        ),
                       ),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'كلمة المرور مطلوبة';
+                        if (_passwordStrengthColor == Colors.red)
+                          return 'كلمة مرور ضعيفة جداً';
+                        return null;
+                      },
                     ),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'كلمة المرور مطلوبة';
-                      if (_passwordStrengthColor == Colors.red)
-                        return 'كلمة مرور ضعيفة جداً';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  fieldLabel('تأكيد كلمة المرور'),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: widget.confirmPasswordController,
-                    obscureText: _obscureConfirmPassword,
-                    textAlign: TextAlign.right,
-                    textDirection: TextDirection.rtl,
-                    decoration:
-                        inputDecoration('ادخل تأكيد كلمة المرور').copyWith(
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                            _obscureConfirmPassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: Colors.white38),
-                        onPressed: () => setState(() =>
-                            _obscureConfirmPassword = !_obscureConfirmPassword),
+                    const SizedBox(height: 20),
+                    fieldLabel('تأكيد كلمة المرور'),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: widget.confirmPasswordController,
+                      obscureText: _obscureConfirmPassword,
+                      textAlign: TextAlign.right,
+                      textDirection: TextDirection.rtl,
+                      decoration: inputDecoration('ادخل تأكيد كلمة المرور')
+                          .copyWith(
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscureConfirmPassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: Colors.white38,
+                              ),
+                              onPressed: () => setState(
+                                () => _obscureConfirmPassword =
+                                    !_obscureConfirmPassword,
+                              ),
+                            ),
+                          ),
+                      validator: (v) => (v != widget.passwordController.text)
+                          ? 'كلمات المرور غير متطابقة'
+                          : null,
+                    ),
+                    if (_passwordStrengthText.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          _passwordStrengthText,
+                          textDirection: TextDirection.rtl,
+                          style: TextStyle(
+                            color: _passwordStrengthColor,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
-                    ),
-                    validator: (v) =>
-                        (v != widget.passwordController.text)
-                            ? 'كلمات المرور غير متطابقة'
-                            : null,
-                  ),
-                  if (_passwordStrengthText.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        _passwordStrengthText,
-                        textDirection: TextDirection.rtl,
-                        style: TextStyle(
-                            color: _passwordStrengthColor, fontSize: 12),
-                      ),
-                    ),
-                  const SizedBox(height: 30),
-                  buildButton('تسجيل', () {
-                    if (widget.formKey.currentState!.validate()) {
-                      widget.onNext();
-                    }
-                  }),
-                  const SizedBox(height: 16),
-                  buildFooter(),
-                  const SizedBox(height: 20),
-                ],
+                    const SizedBox(height: 30),
+                    buildButton('تسجيل', () {
+                      if (widget.formKey.currentState!.validate()) {
+                        widget.onNext();
+                      }
+                    }),
+                    const SizedBox(height: 16),
+                    buildFooter(),
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

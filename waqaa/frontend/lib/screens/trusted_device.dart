@@ -3,10 +3,7 @@ import 'profile_page.dart';
 import 'support_options_page.dart';
 import 'AddTrustDevice.dart';
 import 'linked_accounts_page.dart';
-
-// ══════════════════════════════════════════════
-//                الواجهة الرابعه
-// ══════════════════════════════════════════════
+import 'login_screen.dart';
 
 class TrustedDevicesPage extends StatelessWidget {
   const TrustedDevicesPage({super.key});
@@ -154,7 +151,15 @@ class TrustedDevicesPage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => LoginScreen(),
+                          ),
+                          (route) => false,
+                        );
+                      },
                       child: const Text(
                         "تسجيل الخروج",
                         style: TextStyle(
@@ -277,7 +282,7 @@ class _DrawerCardItem extends StatelessWidget {
   }
 }
 
-class _DeviceCard extends StatelessWidget {
+class _DeviceCard extends StatefulWidget {
   final String deviceName;
   final String deviceKey;
   final String lastSeen;
@@ -289,6 +294,56 @@ class _DeviceCard extends StatelessWidget {
     required this.lastSeen,
     required this.onDelete,
   });
+
+  @override
+  State<_DeviceCard> createState() => _DeviceCardState();
+}
+
+class _DeviceCardState extends State<_DeviceCard> {
+  void _confirmDelete() {
+    showDialog(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF344A52),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'تأكيد الحذف',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'هل أنت متأكد من حذف الجهاز "${widget.deviceName}"؟',
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'تراجع',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE11D48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'حذف',
+                style: TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -315,7 +370,7 @@ class _DeviceCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  deviceName,
+                  widget.deviceName,
                   textAlign: TextAlign.right,
                   style: const TextStyle(
                     color: Colors.white,
@@ -328,7 +383,7 @@ class _DeviceCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            "Device Key: $deviceKey",
+            "Device Key: $widget.deviceKey",
             textAlign: TextAlign.right,
             style: TextStyle(
               color: Colors.white.withOpacity(0.70),
@@ -346,7 +401,7 @@ class _DeviceCard extends StatelessWidget {
                 border: Border.all(color: accent.withOpacity(0.35)),
               ),
               child: Text(
-                lastSeen,
+                widget.lastSeen,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
@@ -359,7 +414,7 @@ class _DeviceCard extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: GestureDetector(
-              onTap: onDelete,
+              onTap: _confirmDelete,
               child: const Text(
                 "حذف",
                 style: TextStyle(

@@ -32,14 +32,21 @@ class LinkedAccountsPage extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  // سهم رجوع على اليمين
+                  // ✅ سهم مطابق لباقي الشاشات (يمين + أخضر + اتجاه صحيح)
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_forward_ios, size: 20),
-                    color: accent,
+                    icon: const Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Icon(
+                        Icons.arrow_forward,
+                        color: Color(0xFF22C55E),
+                      ),
+                    ),
                     splashRadius: 20,
                   ),
+
                   const Spacer(),
+
                   const Text(
                     'الحسابات المرتبطة',
                     style: TextStyle(
@@ -48,8 +55,10 @@ class LinkedAccountsPage extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+
                   const Spacer(),
-                  const SizedBox(width: 44), // توازن
+
+                  const SizedBox(width: 44), // توازن التصميم
                 ],
               ),
             ),
@@ -81,11 +90,61 @@ class LinkedAccountsPage extends StatelessWidget {
 // Account Card
 // ============================================================
 
-class _AccountCard extends StatelessWidget {
+class _AccountCard extends StatefulWidget {
   final String name;
   final String username;
 
   const _AccountCard({required this.name, required this.username});
+
+  @override
+  State<_AccountCard> createState() => _AccountCardState();
+}
+
+class _AccountCardState extends State<_AccountCard> {
+  void _confirmDelete() {
+    showDialog(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF32474F),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'تأكيد الحذف',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'هل أنت متأكد من حذف حساب "${widget.name}"؟',
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'تراجع',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE11D48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'حذف',
+                style: TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,12 +161,12 @@ class _AccountCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // أيقونة + اسم (الأيقونة أول على اليمين)
+          // أيقونة + اسم
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               Text(
-                name,
+                widget.name,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -123,7 +182,7 @@ class _AccountCard extends StatelessWidget {
 
           // username
           Text(
-            username,
+            widget.username,
             textAlign: TextAlign.right,
             style: TextStyle(
               color: Colors.white.withOpacity(0.5),
@@ -133,11 +192,11 @@ class _AccountCard extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // حذف + نشط
+          // نشط + حذف
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // نشط على اليمين
+              // نشط
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -158,9 +217,9 @@ class _AccountCard extends StatelessWidget {
                 ),
               ),
 
-              // حذف على اليسار
+              // حذف
               GestureDetector(
-                onTap: () {},
+                onTap: _confirmDelete,
                 child: const Text(
                   'حذف',
                   style: TextStyle(
