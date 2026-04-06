@@ -6,15 +6,15 @@ class WaqaUser(models.Model):
     STATUS_CHOICES = [('active', 'Active'), ('suspended', 'Suspended'), ('deleted', 'Deleted')]
 
     id               = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    username         = models.TextField(null=True, blank=True, unique=True)
-    display_name     = models.TextField(null=True, blank=True)
+    username         = models.TextField(null=False, blank=True, unique=True)
+    display_name     = models.TextField(null=False, blank=True)
     email            = models.TextField(null=True, blank=True,unique=True)
-    phone            = models.TextField(null=True, blank=True,unique=True)
-    national_id_hmac = models.TextField(null=True, blank=True,unique=True)
+    phone            = models.TextField(null=False, blank=True,unique=True)
+    national_id_hmac = models.TextField(null=False, blank=True,unique=True)
     status           = models.TextField(default='active', choices=STATUS_CHOICES)
     created_at       = models.DateTimeField(auto_now_add=True)
     updated_at       = models.DateTimeField(auto_now=True)
-    password_hash = models.TextField(null=True, blank=True)
+    password_hash = models.TextField(null=False, blank=True)
 
     class Meta:
         db_table = 'users'
