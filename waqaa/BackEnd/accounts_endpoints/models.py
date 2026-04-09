@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from django.core.exceptions import ValidationError
 
 # user
 class WaqaUser(models.Model):
@@ -18,7 +19,13 @@ class WaqaUser(models.Model):
 
     class Meta:
         db_table = 'users'
-
+        indexes = [
+            models.Index(fields=['username']),
+            models.Index(fields=['phone']),
+            models.Index(fields=['email']),
+            models.Index(fields=['national_id_hmac']),
+            models.Index(fields=['status']),
+        ]
     def __str__(self):
         return self.username or self.display_name or str(self.id)
     
@@ -38,7 +45,15 @@ class DelegatedAccess(models.Model):
 
     class Meta:
         db_table = 'delegated_access'
-        unique_together = [('primary_user', 'delegate_user')]
+        constraints = [
+        models.UniqueConstraint(
+            fields=['primary_user', 'delegate_user'],
+            name='unique_primary_delegate_pair'
+        )
+    ]
+    def clean(self):
+        if self.primary_user == self.delegate_user:
+            raise ValidationError("A user cannot delegate themselves.")
 
     def __str__(self):
         return f"{self.primary_user} → {self.delegate_user}"
