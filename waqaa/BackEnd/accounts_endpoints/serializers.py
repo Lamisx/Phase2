@@ -10,7 +10,7 @@ from core.utils import hash_national_id
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model  = WaqaUser
-        fields = ['id', 'username', 'display_name', 'email', 'phone', 'status', 'created_at']
+        fields = ['id', 'username', 'display_name', 'email', 'phone', 'status', 'created_at', 'updated_at']
 
 
 # ------------------------
@@ -21,19 +21,14 @@ class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     display_name = serializers.CharField(required=False, allow_blank=True)
     email = serializers.EmailField(required=False, allow_blank=True)
-    phone = serializers.CharField(required=False, allow_blank=True)
-    national_id = serializers.CharField(required=True)
-
-    password = serializers.CharField(
-        required=True,
-        write_only=True,
-        min_length=8
-    )
+    phone = serializers.CharField(required=True, allow_blank=False)
+    national_id = serializers.CharField(required=True,write_only=True)
+    password = serializers.CharField(required=True,write_only=True,min_length=8)
 
     def validate_username(self, value):
         if WaqaUser.objects.filter(username=value).exists():
             raise serializers.ValidationError("Username already taken.")
-        return value
+        return value.lower()
 
     def validate_email(self, value):
         if value and WaqaUser.objects.filter(email=value).exists():
