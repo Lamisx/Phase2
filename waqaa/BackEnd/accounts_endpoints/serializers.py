@@ -26,13 +26,19 @@ class RegisterSerializer(serializers.Serializer):
     password = serializers.CharField(required=True,write_only=True,min_length=8)
 
     def validate_username(self, value):
+        value = value.strip().lower()
         if WaqaUser.objects.filter(username=value).exists():
             raise serializers.ValidationError("Username already taken.")
-        return value.lower()
+        return value
 
     def validate_email(self, value):
-        if value and WaqaUser.objects.filter(email=value).exists():
-            raise serializers.ValidationError("Email already registered.")
+        if value:
+            value = value.strip().lower()
+            pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(pattern, value):
+            raise serializers.ValidationError("Invalid email format.")
+            if WaqaUser.objects.filter(email=value).exists():
+             raise serializers.ValidationError("Email already registered.")
         return value
 
     def validate_phone(self, value):

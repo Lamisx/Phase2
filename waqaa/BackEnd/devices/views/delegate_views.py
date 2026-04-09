@@ -6,6 +6,7 @@ from rest_framework import status
 from ..models import DelegatedAccess
 from ..serializers import AddDelegateSerializer, DelegateSerializer
 
+#يسمح لمستخدم أساسي بتفويض مستخدم آخر للتصرف نيابةً عنه
 
 @api_view(["POST"])
 def create_delegate(request):
