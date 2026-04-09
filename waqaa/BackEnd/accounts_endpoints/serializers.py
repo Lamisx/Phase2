@@ -99,7 +99,7 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(required=True, write_only=True)
 
     def validate(self, data):
-        username = data.get("username")
+        username = data.get("username").strip().lower()
         password = data.get("password")
         try:
             user = WaqaUser.objects.get(username=username)
@@ -107,7 +107,7 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid username or password.")
 
         if not user.password_hash:
-            raise serializers.ValidationError("This account has no password configured.")
+            raise serializers.ValidationError("Invalid username or password.")
 
         if not check_password(password, user.password_hash):
             raise serializers.ValidationError("Invalid username or password.")
