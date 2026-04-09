@@ -3,6 +3,8 @@ from django.contrib.auth.hashers import make_password, check_password
 
 from .models import WaqaUser, DelegatedAccess
 from core.utils import hash_national_id
+from django.core.validators import RegexValidator
+import re
 
 #------------
 # user 
@@ -17,6 +19,12 @@ class UserSerializer(serializers.ModelSerializer):
 # Auth
 # ------------------------
 
+# إذا النظام سعودي فقط
+phone_regex = RegexValidator(
+    regex=r'^05\d{8}$',
+    message="رقم الهاتف يجب أن يبدأ بـ 05 ويكون 10 أرقام"
+)
+
 class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     display_name = serializers.CharField(required=False, allow_blank=True)
@@ -24,6 +32,8 @@ class RegisterSerializer(serializers.Serializer):
     phone = serializers.CharField(required=True, allow_blank=False)
     national_id = serializers.CharField(required=True,write_only=True)
     password = serializers.CharField(required=True,write_only=True,min_length=8)
+
+    
 
     def validate_username(self, value):
         value = value.strip().lower()
@@ -35,15 +45,23 @@ class RegisterSerializer(serializers.Serializer):
         if value:
             value = value.strip().lower()
             pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(pattern, value):
-            raise serializers.ValidationError("Invalid email format.")
+            
+            if not re.match(pattern, value):
+                raise serializers.ValidationError("Invalid email format.")
             if WaqaUser.objects.filter(email=value).exists():
-             raise serializers.ValidationError("Email already registered.")
+                raise serializers.ValidationError("Email already registered.")
         return value
+    
 
+    
     def validate_phone(self, value):
-        if value and WaqaUser.objects.filter(phone=value).exists():
-            raise serializers.ValidationError("Phone number already registered.")
+        if value:
+            cleaned = re.sub(r'(?!^\+)\D', '', value.strip())
+            phone_regex(cleaned)
+            
+            if WaqaUser.objects.filter(phone=cleaned).exists():
+                raise serializers.ValidationError("Phone number already registered.")
+            return cleaned
         return value
 
     def validate_national_id(self, value):
