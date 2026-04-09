@@ -6,6 +6,8 @@ from core.utils import hash_national_id
 from django.core.validators import RegexValidator
 import re
 
+
+
 #------------
 # user 
 #-----------
@@ -23,6 +25,12 @@ class UserSerializer(serializers.ModelSerializer):
 phone_regex = RegexValidator(
     regex=r'^05\d{8}$',
     message="رقم الهاتف يجب أن يبدأ بـ 05 ويكون 10 أرقام"
+)
+
+#تحقق من الهويه
+national_id_regex = RegexValidator(
+    regex=r'^\d{10}$',
+    message="رقم الهوية يجب أن يكون 10 أرقام"
 )
 
 class RegisterSerializer(serializers.Serializer):
@@ -65,20 +73,21 @@ class RegisterSerializer(serializers.Serializer):
         return value
 
     def validate_national_id(self, value):
+        national_id_regex(value)
         national_id_hmac = hash_national_id(value)
 
         if WaqaUser.objects.filter(national_id_hmac=national_id_hmac).exists():
             raise serializers.ValidationError("National ID already registered.")
 
-        return value
+        return national_id_hmac
 
     def create(self, validated_data):
         password = validated_data.pop("password")
-        national_id = validated_data.pop("national_id")
+        national_id_hmac  = validated_data.pop("national_id")
 
         user = WaqaUser.objects.create(
             password_hash=make_password(password),
-            national_id_hmac=hash_national_id(national_id),
+            national_id_hmac=national_id_hmac,
             **validated_data
         )
 
