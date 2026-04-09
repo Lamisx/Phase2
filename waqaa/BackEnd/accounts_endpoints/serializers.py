@@ -149,18 +149,22 @@ class AddDelegateSerializer(serializers.Serializer):
         primary_user_id = data["primary_user_id"]
         delegate_user_id = data["delegate_user_id"]
 
-        try:
-            primary_user = WaqaUser.objects.get(id=primary_user_id)
-        except WaqaUser.DoesNotExist:
-            raise serializers.ValidationError("Primary user not found.")
+        if primary_user_id == delegate_user_id:
+            raise serializers.ValidationError("You cannot delegate yourself.")
 
-        try:
-            delegate_user = WaqaUser.objects.get(id=delegate_user_id)
-        except WaqaUser.DoesNotExist:
+        users = WaqaUser.objects.filter(
+          id__in=[primary_user_id, delegate_user_id]
+    )
+        users_dict = {user.id: user for user in users}
+
+        primary_user  = users_dict.get(primary_user_id)
+        delegate_user = users_dict.get(delegate_user_id)
+
+        if not primary_user:
+            raise serializers.ValidationError("Primary user not found.")
+        if not delegate_user:
             raise serializers.ValidationError("Delegate user not found.")
 
-        if primary_user.id == delegate_user.id:
-            raise serializers.ValidationError("You cannot delegate yourself.")
 
         exists = DelegatedAccess.objects.filter(
             primary_user=primary_user,
