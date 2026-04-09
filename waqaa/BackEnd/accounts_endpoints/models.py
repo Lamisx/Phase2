@@ -38,8 +38,8 @@ class DelegatedAccess(models.Model):
     id                   = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     primary_user     = models.ForeignKey(WaqaUser, on_delete=models.CASCADE, related_name='delegated_to')
     delegate_user    = models.ForeignKey(WaqaUser, on_delete=models.CASCADE, related_name='delegated_from')
-    added_via            = models.TextField(choices=ADDED_VIA_CHOICES)
-    status               = models.TextField(default='active', choices=STATUS_CHOICES)
+    added_via            = models.CharField(max_length=10,choices=ADDED_VIA_CHOICES)
+    status               = models.CharField(max_length=20,default='active', choices=STATUS_CHOICES)
     created_at           = models.DateTimeField(auto_now_add=True)
     revoked_at           = models.DateTimeField(null=True, blank=True)
 
