@@ -123,12 +123,14 @@ class LoginSerializer(serializers.Serializer):
 class DelegateSerializer(serializers.ModelSerializer):
     delegate_username = serializers.CharField(source='delegate_user.username', read_only=True)
     delegate_displayname = serializers.CharField(source='delegate_user.display_name', read_only=True)
+    primary_username     = serializers.CharField(source='primary_user.username',      read_only=True)
 
     class Meta:
         model = DelegatedAccess
         fields = [
             'id',
-            'delegate_user',
+            #'delegate_user', يكشف معلومة داخلية بدون داعٍ 
+            'primary_username',#  ← مفيد للـ context | من هو صاحب التفويض الأصلي
             'delegate_username',
             'delegate_displayname',
             'added_via',
