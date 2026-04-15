@@ -3,7 +3,7 @@ from . import views
 
 urlpatterns = [
 
-    # ─── Session ──────────────────────────────────────
+    # ─── Session ─────────────────────────────────────
     path("sessions/create/",                    views.create_session,     name="create_session"),
     path("sessions/<uuid:session_id>/verify/",  views.verify_session,     name="verify_session"),
     path("sessions/<uuid:session_id>/status/",  views.get_session_status, name="get_session_status"),

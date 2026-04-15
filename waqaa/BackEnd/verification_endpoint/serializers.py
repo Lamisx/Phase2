@@ -3,7 +3,7 @@ from .models import AuditLog, KeyUsageLog, VerificationSession, VerificationChal
 
 # ============================================================
 # Session & Challenge
-# ============================================================
+# ===========================================================
 
 class VerificationChallengeSerializer(serializers.ModelSerializer):
     class Meta:
