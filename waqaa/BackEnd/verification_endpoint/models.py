@@ -6,8 +6,14 @@ import uuid
 from accounts_endpoints.models import WaqaUser
 from organization_endpoints.models import Organization, OrganizationUser
 from devices_endpoints.models import Device
+<<<<<<< HEAD
 from django.utils.translation import gettext_lazy as _ #لترجمة الحقول في لوحة الإدارة
 # ===========================================================
+=======
+
+
+ # ============================================================
+>>>>>>> 8c6f7098cf3d27df711aef655ba6e272d182b799
 # Verification Session
 # ============================================================
 
