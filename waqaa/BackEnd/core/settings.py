@@ -39,7 +39,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'accounts_endpoints',
     'devices_endpoints',
-    'organization_endpoints'
+    'organization_endpoints',
     'verification_endpoint',
 ]
 
@@ -78,13 +78,13 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-       'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'postgres'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'postgres',
+        'USER': 'postgres.nbxjvaduhnuicamrocnd',
+        'PASSWORD': 'RWaqaa090@@',
+        'HOST': 'aws-1-ap-southeast-1.pooler.supabase.com',
+        'PORT': '6543',
     }
 }
 

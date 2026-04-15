@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
-from waqaa.BackEnd.devices.serializers import UserSerializer
-from waqaa.BackEnd.devices_endpoints.models import VerificationSession
+from accounts_endpoints.serializers import UserSerializer
+from verification_endpoint.models import VerificationSession
 from .models import Organization, OrganizationApiKey, OrganizationUser
 
 
@@ -61,3 +61,16 @@ class SessionStatusSerializer(serializers.ModelSerializer):
             "failure_reason",
         ]
 
+class LinkUserSerializer(serializers.Serializer):
+    organization_id = serializers.UUIDField()
+    user_id = serializers.UUIDField()
+    external_user_ref = serializers.CharField()
+
+    def create(self, validated_data):
+        from .models import OrganizationUser
+
+        return OrganizationUser.objects.create(
+            organization_id=validated_data["organization_id"],
+            user_id=validated_data["user_id"],
+            external_user_ref=validated_data["external_user_ref"],
+        )
