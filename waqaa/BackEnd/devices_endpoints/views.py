@@ -28,6 +28,8 @@ from organization_endpoints.models import Organization, OrganizationApiKey, Orga
 
 from core.utils import hash_api_key
 from core.utils_crypto import verify_ed25519_signature
+def create_session(request):
+    return Response({"message": "Session created"})
     
 @api_view(["POST"])
 def register_device_key(request):

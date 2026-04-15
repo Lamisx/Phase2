@@ -1,8 +1,7 @@
 from rest_framework import serializers
-from .models import AuditLog, Device, DeviceKey, DeviceRevocationLog
-from waqaa.BackEnd.accounts_endpoints.serializers import UserSerializer
-from waqaa.BackEnd.organization_endpoints.serializers import OrganizationSerializer, OrganizationUserSerializer
-
+from .models import  Device, DeviceKey, DeviceRevocationLog
+from accounts_endpoints.serializers import UserSerializer
+from organization_endpoints.serializers import OrganizationSerializer
 # ============================================================
 # Device Serializers
 # ============================================================
@@ -90,4 +89,3 @@ class DeviceRevocationLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeviceRevocationLog
         fields = '__all__'
-

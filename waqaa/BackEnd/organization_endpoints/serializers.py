@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
-from waqaa.BackEnd.devices.serializers import UserSerializer
-from waqaa.BackEnd.devices_endpoints.models import VerificationSession
+from accounts_endpoints.serializers import UserSerializer
+from verification_endpoint.models import VerificationSession
 from .models import Organization, OrganizationApiKey, OrganizationUser
 
 
@@ -61,3 +61,36 @@ class SessionStatusSerializer(serializers.ModelSerializer):
             "failure_reason",
         ]
 
+
+class LinkUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrganizationUser
+        fields = ['organization', 'user', 'external_user_ref']
+
+    def validate(self, data):
+        organization = data['organization']
+        user = data['user']
+        external_user_ref = data['external_user_ref']
+
+        # ❌ منع التكرار (user + organization)
+        if OrganizationUser.objects.filter(
+            organization=organization,
+            user=user
+        ).exists():
+            raise serializers.ValidationError({
+                "detail": "User already linked to this organization"
+            })
+
+        # ❌ منع تكرار external_user_ref داخل نفس المنظمة
+        if OrganizationUser.objects.filter(
+            organization=organization,
+            external_user_ref=external_user_ref
+        ).exists():
+            raise serializers.ValidationError({
+                "detail": "external_user_ref already exists in this organization"
+            })
+
+        return data
+
+    def create(self, validated_data):
+        return OrganizationUser.objects.create(**validated_data)

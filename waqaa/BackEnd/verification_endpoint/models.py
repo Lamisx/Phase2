@@ -2,8 +2,7 @@ from django.db import models
 import uuid
 from accounts_endpoints.models import WaqaUser
 from organization_endpoints.models import Organization, OrganizationUser
-from .models import  Device
-
+from devices.models import Device
  # ============================================================
 # Verification Session
 # ============================================================
