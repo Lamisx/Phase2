@@ -4,7 +4,6 @@ import uuid
 from accounts_endpoints.models import WaqaUser
 from organization_endpoints.models import Organization, OrganizationUser
 from devices_endpoints.models import Device
-
 from django.utils.translation import gettext_lazy as _ #لترجمة الحقول في لوحة الإدارة
 
 # ============================================================
@@ -12,6 +11,15 @@ from django.utils.translation import gettext_lazy as _ #لترجمة الحقو�
 # ============================================================
 
 class VerificationSession(models.Model):
+    class OperationType(models.TextChoices):
+        LOGIN = 'login', _('Login')
+        UPDATE_PROFILE = 'update_profile', _('Update Profile')
+        ADD_DELEGATE = 'add_delegate', _('Add Delegate')
+        REMOVE_DELEGATE = 'remove_delegate', _('Remove Delegate')
+        TRANSFER = 'transfer', _('Transfer')
+        CHOICES = {LOGIN, UPDATE_PROFILE, ADD_DELEGATE, REMOVE_DELEGATE, TRANSFER}
+
+    
     class Status(models.TextChoices):
         PENDING = 'pending', _('Pending')
         CHALLENGE_ISSUED = 'challenge_issued', _('Challenge Issued')
@@ -33,7 +41,7 @@ class VerificationSession(models.Model):
     verified_by_user            = models.ForeignKey(WaqaUser, on_delete=models.SET_NULL, null=True,blank=True, related_name="verified_sessions",)##هل التحقق تم بواسطة الـ primary？
     verified_by_actor_type      = models.CharField(max_length=10, choices=ActorType.choices, null=True, blank=True)# for audit
     org_operation_ref           = models.CharField(max_length=255)
-    operation_type              = models.CharField(max_length=100)
+    operation_type              = models.CharField(max_length=100, choices=OperationType.choices)
     operation_hash              = models.CharField(max_length=128,null=True, blank=True)
     operation_payload_encrypted = models.TextField(null=True, blank=True)
     status                      = models.CharField(max_length=20,default=Status.PENDING, choices=Status.choices)
@@ -52,14 +60,12 @@ class VerificationSession(models.Model):
     class Meta:
         db_table = 'verification_sessions'
         ordering = ['-created_at']
-
         constraints = [
             models.UniqueConstraint(
                 fields=['organization', 'org_operation_ref'],
                 name='uq_verification_session_org_operation_ref'
             )
         ]
-
         indexes = [
             models.Index(fields=['status', 'expires_at'], name='idx_vs_status_expires'),  
             models.Index(fields=['organization', 'status'],  name='idx_vs_org_status'),
@@ -240,7 +246,11 @@ class KeyUsageLog(models.Model):
         db_table = 'key_usage_log'
         managed  = False  # no FK — immutable log
         ordering = ['-created_at']
-        
+        indexes = [
+        models.Index(fields=['organization_id', 'created_at'], name='idx_keylog_org_created'),
+        models.Index(fields=['device_id', 'created_at'], name='idx_keylog_device_created'),
+        models.Index(fields=['session_id'], name='idx_keylog_session'),
+        ]
     def __str__(self):
         return f"KeyUsage {self.id} — {self.action} ({self.result})"
 
