@@ -14,7 +14,7 @@ class Device(models.Model):
 
     id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user            = models.ForeignKey(WaqaUser, on_delete=models.CASCADE, related_name='devices')
-    label           = models.TextField(null=True, blank=True)
+    label           = models.CharField(max_length=100, null=True, blank=True)
     platform        = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
     app_instance_id = models.CharField(max_length=100, null=True, blank=True)
     is_active       = models.BooleanField(default=True)
@@ -22,9 +22,23 @@ class Device(models.Model):
     created_at      = models.DateTimeField(auto_now_add=True)
     updated_at      = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        db_table = 'devices'
+    # class Meta:
+    #     db_table = 'devices'
 
+    # [FIX] أضفنا UniqueConstraint على is_primary_device
+    # المشكلة: الكود القديم ما كان يمنع المستخدم من امتلاك أكثر من جهاز أساسي (primary) واحد
+    # يعني كان ممكن يصير عند نفس المستخدم جهازين أو أكثر كلهم is_primary_device=True
+    # وهذا يسبب تعارض في منطق المشروع لأن الـ OTP مرتبط بجهاز أساسي واحد فقط
+    # الحل: أضفنا constraint على مستوى قاعدة البيانات يمنع هذا التعارض نهائياً
+class Meta:
+    db_table = 'devices'
+    constraints = [
+        models.UniqueConstraint(
+            fields=['user'],
+            condition=models.Q(is_primary_device=True),
+            name='unique_primary_device_per_user'
+        )
+    ]
     def __str__(self):
         return f"{self.user} — {self.platform} ({self.id})"
 # ============================================================
@@ -69,7 +83,7 @@ class DeviceRevocationLog(models.Model):
     id                    = models.BigAutoField(primary_key=True)
     device_id             = models.UUIDField()
     user_id               = models.UUIDField(null=True, blank=True)
-    revoked_by_actor_type = models.TextField(choices=ACTOR_CHOICES)
+    revoked_by_actor_type = models.CharField(max_length=10, choices=ACTOR_CHOICES)
     revoked_by_actor_id   = models.UUIDField(null=True, blank=True)
     reason                = models.TextField(null=True, blank=True)
     created_at            = models.DateTimeField(auto_now_add=True)
