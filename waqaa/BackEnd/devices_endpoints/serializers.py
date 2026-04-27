@@ -9,7 +9,8 @@ class DeviceCreateSerializer(serializers.Serializer):
 
     user_id = serializers.UUIDField(required=True)
     label = serializers.CharField(required=False, allow_blank=True)
-    platform = serializers.CharField(required=True)
+    platform = serializers.ChoiceField(
+    choices=['android', 'ios', 'web', 'desktop'], required=True)# عشان ما يقبل اي نص
     app_instance_id = serializers.CharField(required=False, allow_blank=True)
 
 class DeviceSerializer(serializers.ModelSerializer):
@@ -22,6 +23,7 @@ class DeviceSerializer(serializers.ModelSerializer):
             "label",
             "platform",
             "app_instance_id",
+            "is_primary_device",  # ← أضفناه
             "is_active",
             "created_at"
         ]
@@ -67,6 +69,8 @@ class DeviceKeySerializer(serializers.ModelSerializer):
         ]
 
 """لإنشاء مفتاح جهاز جديد (من طرف المنظمة)"""
+
+# الكلاس معرّف لكن مو مستخدم في أي (view) — إما تستخدمه أو تحذفه عشان الكود ما يكون فيه أشياء زائدة.
 class DeviceKeyCreateSerializer(serializers.Serializer):
    
     organization_id = serializers.UUIDField()
@@ -88,4 +92,14 @@ class RegisterDeviceKeySerializer(serializers.Serializer):
 class DeviceRevocationLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeviceRevocationLog
-        fields = '__all__'
+        # fields = '__all__'# مب زينه
+        fields = [# افضل نحدد حقول 
+            'id',
+            'device_id',
+            'user_id',
+            'revoked_by_actor_type',
+            'revoked_by_actor_id',
+            'reason',
+            'created_at'
+        ]
+

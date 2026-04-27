@@ -10,8 +10,4 @@ urlpatterns = [
     path("keys/device/<uuid:device_id>/", views.list_device_keys),
     path("keys/<uuid:device_key_id>/revoke/", views.revoke_device_key),
 
-    #path("sessions/create/", views.create_session),
-    #path("sessions/<uuid:session_id>/verify/", views.verify_session),
-    #path("sessions/<uuid:session_id>/status/", views.get_session_status),
-    #path("sessions/<uuid:session_id>/cancel/", views.cancel_session),
 ]

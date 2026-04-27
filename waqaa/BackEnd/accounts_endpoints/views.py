@@ -14,7 +14,6 @@ from .serializers import (
 @api_view(["GET"])
 def health_check(request):
     return Response({"status": "server is running"})
-
 # register endpoint
 @api_view(["POST"])
 def register(request):
@@ -46,8 +45,6 @@ def login(request):
         status=status.HTTP_200_OK
     ) 
 
-
-
 @api_view(["POST"])
 def create_delegate(request):
     serializer = AddDelegateSerializer(data=request.data)
@@ -62,7 +59,6 @@ def create_delegate(request):
         },
         status=status.HTTP_201_CREATED
     )#
-
 
 @api_view(["GET"])
 def list_delegates(request):
@@ -79,7 +75,6 @@ def list_delegates(request):
     ).order_by("-created_at")
 
     serializer = DelegateSerializer(delegations, many=True)
-
     return Response(
         {
             "count": len(serializer.data),
@@ -87,7 +82,6 @@ def list_delegates(request):
         },
         status=status.HTTP_200_OK
     )
-
 
 @api_view(["DELETE"])
 def delete_delegate(request, delegate_id):

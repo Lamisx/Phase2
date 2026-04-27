@@ -7,6 +7,8 @@ from .permissions import require_scope
 from .models import OrganizationUser
 
 
+
+
 @api_view(["POST"])
 @require_scope("session:create")
 def link_user(request):
