@@ -150,15 +150,15 @@ def access_decision(request):
 
     if not organization_id:
         return Response({"error": "organization_id required"}, status=400)
-
-    has_valid_key = DeviceKey.objects.filter(
-        device=device,
-        organization_id=organization_id,
-        is_active=True 
-        ).exists()
-
+    
     try:
         device = Device.objects.get(id=device_id)
+
+        has_valid_key = DeviceKey.objects.filter(
+            device=device,
+            organization_id=organization_id,
+            is_active=True 
+            ).exists()
 
         if device.is_active and has_valid_key:
             return Response({"access": "granted"})
@@ -169,6 +169,7 @@ def access_decision(request):
         return Response({"access": "unknown_device"}, status=404)
 
 
+#يسجّل جهاز جديد للمستخدم في النظام.
 @api_view(["POST"])
 def create_device(request):
 
@@ -185,21 +186,30 @@ def create_device(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
+    has_primary = Device.objects.filter(
+        user=user,
+        is_primary_device=True
+    ).exists()
+
     device = Device.objects.create(
         user=user,
         label=serializer.validated_data.get("label"),
         platform=serializer.validated_data.get("platform"),
-        app_instance_id=serializer.validated_data.get("app_instance_id")
+        app_instance_id=serializer.validated_data.get("app_instance_id"),
+        is_primary_device=not has_primary  # أول جهاز = True، باقي = False
     )
 
     return Response(
         {
             "message": "Device created successfully",
-            "device_id": str(device.id)
+            "device_id": str(device.id),
+            "is_primary_device": device.is_primary_device #المستخدم يحتاج يعرف إذا جهازه أساسي أو مفوَّض
+
         },
         status=status.HTTP_201_CREATED
     )
 
+#المستخدم يشوف كل أجهزته
 @api_view(["GET"])
 def list_devices(request, user_id):
     try:
@@ -210,7 +220,10 @@ def list_devices(request, user_id):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    devices = Device.objects.filter(user=user).order_by("-created_at")
+    devices = Device.objects.filter(
+        user=user,
+        is_active=True # الصح — يجيب النشطة فقط
+        ).order_by("-created_at")
     serializer = DeviceSerializer(devices, many=True)
 
     return Response(
@@ -222,6 +235,12 @@ def list_devices(request, user_id):
 
 # حذفت المكتبات المكرره (استدعيناه مرتين )
 
+#يلغي جهاز كامل مع كل مفاتيحه دفعة وحدة ويسجّل العملية في سجل المراجعة 
+# --------------------------- اسال البنات ؟؟؟
+# مشكلة الغاء الجهاز الاساسي
+#نسمح بإلغاء الجهاز الأساسي لكن بشرط إن المستخدم يحدد جهاز أساسي بديل في نفس الوقت؟
+# مشكله ثانيه 
+#اذا ما عنده أجهزة مفوَّضة يعني الجهاز الأساسي هو الوحيد؟
 
 @api_view(["POST"])
 @transaction.atomic
@@ -253,7 +272,7 @@ def revoke_device(request, device_id):
 
     DeviceRevocationLog.objects.create(
         device_id=device.id,
-        user_id=device.user.id if device.user_id else None,
+        user_id=device.user_id,
         revoked_by_actor_type="user",
         reason="device_revoked"
     )
