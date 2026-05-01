@@ -2,7 +2,8 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.core.cache import cache
 
-from .models import OrganizationApiKey
+# from .models import OrganizationApiKey 
+from organization_endpoints.models import OrganizationApiKey
 
 
 class APIKeyMiddleware:

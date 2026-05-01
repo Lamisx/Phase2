@@ -24,26 +24,15 @@ from .serializers import (
     
 )
 
-from accounts_endpoints.models import WaqaUser, DelegatedAccess
-from organization_endpoints.models import Organization, OrganizationApiKey, OrganizationUser
+from accounts_endpoints.models import WaqaUser
+from organization_endpoints.models import Organization
  # مو مستخدمات بالكود(DelegatedAccess وOrganizationApiKey و OrganizationUser)
 
-<<<<<<< HEAD
-# from core.utils import hash_api_key
-# from core.utils_crypto import verify_ed25519_signature
 
-# @transaction.atomic
-#هي ضمان إن مجموعة عمليات تصير كلها مع بعض أو ما تصير أبداً — ما فيه "
-#  لو أي عملية فشلت — كل شي يرجع لما كان عليه 
-# المفتاح القديم: شغّال 
-# المفتاح الجديد: ما اتنشأ بس القديم سليم   
-=======
-from core.utils import hash_api_key
-from core.utils_crypto import verify_ed25519_signature
+@api_view(["POST"])
 def create_session(request):
     return Response({"message": "Session created"})
     
->>>>>>> ecd86f70f5ed522904ce16f9d43b29b96f5dafd2
 @api_view(["POST"])
 @transaction.atomic
 def register_device_key(request):
