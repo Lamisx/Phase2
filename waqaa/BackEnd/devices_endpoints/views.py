@@ -1,6 +1,7 @@
-import json
-import secrets
-from datetime import timedelta
+# import json
+# import secrets
+# from datetime import timedelta
+ # مو مستخدمات بالكود
 
 from django.utils import timezone
 from django.db import transaction
@@ -25,11 +26,26 @@ from .serializers import (
 
 from accounts_endpoints.models import WaqaUser, DelegatedAccess
 from organization_endpoints.models import Organization, OrganizationApiKey, OrganizationUser
+ # مو مستخدمات بالكود(DelegatedAccess وOrganizationApiKey و OrganizationUser)
 
+<<<<<<< HEAD
+# from core.utils import hash_api_key
+# from core.utils_crypto import verify_ed25519_signature
+
+# @transaction.atomic
+#هي ضمان إن مجموعة عمليات تصير كلها مع بعض أو ما تصير أبداً — ما فيه "
+#  لو أي عملية فشلت — كل شي يرجع لما كان عليه 
+# المفتاح القديم: شغّال 
+# المفتاح الجديد: ما اتنشأ بس القديم سليم   
+=======
 from core.utils import hash_api_key
 from core.utils_crypto import verify_ed25519_signature
+def create_session(request):
+    return Response({"message": "Session created"})
     
+>>>>>>> ecd86f70f5ed522904ce16f9d43b29b96f5dafd2
 @api_view(["POST"])
+@transaction.atomic
 def register_device_key(request):
     serializer = RegisterDeviceKeySerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -65,11 +81,14 @@ def register_device_key(request):
         is_active=True
     )
 
-    return Response({
-        "message": "DEVICE_KEY_REGISTERED",
-        "device_key_id": str(device_key.id)
-    })
+    return Response(
+        {"message": "DEVICE_KEY_REGISTERED",
+        "device_key_id": str(device_key.id)}, 
+         status=status.HTTP_201_CREATED
+        )
 
+# يجيب كل المفاتيح العامةالنشطة المرتبطة بجهاز معين.
+# هل هنا نجيب كل المفاتيح ولابس نشط ؟
 @api_view(["GET"])
 def list_device_keys(request, device_id):
     try:
@@ -80,7 +99,7 @@ def list_device_keys(request, device_id):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    keys = DeviceKey.objects.filter(device=device).order_by("-created_at")
+    keys = DeviceKey.objects.filter(device=device , is_active=True ).order_by("-created_at")#المهم عنده المفاتيح الشغّالة فقط
     serializer = DeviceKeySerializer(keys, many=True)
 
     return Response(
@@ -92,7 +111,7 @@ def list_device_keys(request, device_id):
     )
 
 
-
+# يلغي مفتاح عام معين مرتبط بجهاز — بدون ما يلغي الجهاز نفسه.
 @api_view(["POST"])
 def revoke_device_key(request, device_key_id):
     try:
@@ -111,7 +130,9 @@ def revoke_device_key(request, device_key_id):
 
     device_key.is_active = False
     device_key.revoked_at = timezone.now()
-    device_key.revocation_reason = "revoked_by_api"
+    device_key.revocation_reason = request.data.get(
+    "reason", "revoked_by_api" ) # لو ما أرسل سبب، يستخدم الافتراضي
+
     device_key.save()
 
     return Response(
@@ -124,18 +145,30 @@ def revoke_device_key(request, device_key_id):
 
 
 #هل هنا مفترض يكون اتخاذ القرار ؟ لاني اشوف خطا يكون هنا 
+# ثلاثة شروط : يقرر هل يسمح للجهاز بالوصول أو لا
+#  1. الجهاز نشط 2. عنده مفتاح نشط 3. المفتاح مرتبط بالمنظمة المطلوبة
 @api_view(["POST"])
 def access_decision(request):
 
     device_id = request.data.get("device_id")
+    organization_id = request.data.get("organization_id")
 
     if not device_id:
         return Response({"error": "device_id required"}, status=400)
 
+    if not organization_id:
+        return Response({"error": "organization_id required"}, status=400)
+    
     try:
         device = Device.objects.get(id=device_id)
 
-        if device.is_active:
+        has_valid_key = DeviceKey.objects.filter(
+            device=device,
+            organization_id=organization_id,
+            is_active=True 
+            ).exists()
+
+        if device.is_active and has_valid_key:
             return Response({"access": "granted"})
         else:
             return Response({"access": "denied"})
@@ -144,6 +177,7 @@ def access_decision(request):
         return Response({"access": "unknown_device"}, status=404)
 
 
+#يسجّل جهاز جديد للمستخدم في النظام.
 @api_view(["POST"])
 def create_device(request):
 
@@ -160,21 +194,30 @@ def create_device(request):
             status=status.HTTP_404_NOT_FOUND
         )
 
+    has_primary = Device.objects.filter(
+        user=user,
+        is_primary_device=True
+    ).exists()
+
     device = Device.objects.create(
         user=user,
         label=serializer.validated_data.get("label"),
         platform=serializer.validated_data.get("platform"),
-        app_instance_id=serializer.validated_data.get("app_instance_id")
+        app_instance_id=serializer.validated_data.get("app_instance_id"),
+        is_primary_device=not has_primary  # أول جهاز = True، باقي = False
     )
 
     return Response(
         {
             "message": "Device created successfully",
-            "device_id": str(device.id)
+            "device_id": str(device.id),
+            "is_primary_device": device.is_primary_device #المستخدم يحتاج يعرف إذا جهازه أساسي أو مفوَّض
+
         },
         status=status.HTTP_201_CREATED
     )
 
+#المستخدم يشوف كل أجهزته
 @api_view(["GET"])
 def list_devices(request, user_id):
     try:
@@ -185,7 +228,10 @@ def list_devices(request, user_id):
             status=status.HTTP_404_NOT_FOUND
         )
 
-    devices = Device.objects.filter(user=user).order_by("-created_at")
+    devices = Device.objects.filter(
+        user=user,
+        is_active=True # الصح — يجيب النشطة فقط
+        ).order_by("-created_at")
     serializer = DeviceSerializer(devices, many=True)
 
     return Response(
@@ -195,14 +241,9 @@ def list_devices(request, user_id):
         },
         status=status.HTTP_200_OK)
 
-from django.db import transaction
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
+# حذفت المكتبات المكرره (استدعيناه مرتين )
 
-from .models import Device, DeviceKey, DeviceRevocationLog
-
-
+#يلغي جهاز كامل مع كل مفاتيحه دفعة وحدة ويسجّل العملية في سجل المراجعة 
 @api_view(["POST"])
 @transaction.atomic
 def revoke_device(request, device_id):
@@ -219,8 +260,21 @@ def revoke_device(request, device_id):
             {"error": "DEVICE_ALREADY_REVOKED"},
             status=status.HTTP_400_BAD_REQUEST
         )
+    
+    if device.is_primary_device:
+        new_primary = Device.objects.filter(
+            user=device.user,
+            is_active=True,
+            is_primary_device=False
+        ).first()
+
+        if new_primary:
+            new_primary.is_primary_device = True
+            new_primary.save()
+             # لو ما فيه جهاز ثاني — يلغي مباشرة ويتواصل مع الدعم
 
     device.is_active = False
+    device.is_primary_device = False 
     device.save()
 
     DeviceKey.objects.filter(
@@ -233,7 +287,7 @@ def revoke_device(request, device_id):
 
     DeviceRevocationLog.objects.create(
         device_id=device.id,
-        user_id=device.user.id if device.user_id else None,
+        user_id=device.user_id,
         revoked_by_actor_type="user",
         reason="device_revoked"
     )
