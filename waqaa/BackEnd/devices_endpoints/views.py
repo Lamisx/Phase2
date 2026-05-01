@@ -236,12 +236,6 @@ def list_devices(request, user_id):
 # حذفت المكتبات المكرره (استدعيناه مرتين )
 
 #يلغي جهاز كامل مع كل مفاتيحه دفعة وحدة ويسجّل العملية في سجل المراجعة 
-# --------------------------- اسال البنات ؟؟؟
-# مشكلة الغاء الجهاز الاساسي
-#نسمح بإلغاء الجهاز الأساسي لكن بشرط إن المستخدم يحدد جهاز أساسي بديل في نفس الوقت؟
-# مشكله ثانيه 
-#اذا ما عنده أجهزة مفوَّضة يعني الجهاز الأساسي هو الوحيد؟
-
 @api_view(["POST"])
 @transaction.atomic
 def revoke_device(request, device_id):
@@ -258,8 +252,21 @@ def revoke_device(request, device_id):
             {"error": "DEVICE_ALREADY_REVOKED"},
             status=status.HTTP_400_BAD_REQUEST
         )
+    
+    if device.is_primary_device:
+        new_primary = Device.objects.filter(
+            user=device.user,
+            is_active=True,
+            is_primary_device=False
+        ).first()
+
+        if new_primary:
+            new_primary.is_primary_device = True
+            new_primary.save()
+             # لو ما فيه جهاز ثاني — يلغي مباشرة ويتواصل مع الدعم
 
     device.is_active = False
+    device.is_primary_device = False 
     device.save()
 
     DeviceKey.objects.filter(
