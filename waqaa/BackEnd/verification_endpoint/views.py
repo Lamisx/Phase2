@@ -1,263 +1,414 @@
-import json
-import secrets
-from datetime import timedelta
-
-from django.utils import timezone
-from django.db import transaction
-
-from rest_framework.decorators import api_view
+import base64
+from django.db import IntegrityError
+from django.shortcuts import get_object_or_404
+from rest_framework import status, generics, permissions, serializers as drf_serializers
+from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
-
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.throttling import ScopedRateThrottle
+from organization_endpoints.models import OrganizationUser
+from .authentication import OrganizationAPIKeyAuthentication
 from .models import (
     VerificationSession,
-    VerificationChallenge,
     AuditLog,
     KeyUsageLog,
 )
-
 from .serializers import (
     CreateSessionSerializer,
-    VerifySessionSerializer,
     SessionStatusSerializer,
+    VerificationChallengeSerializer,
+    AuditLogSerializer,
+    KeyUsageLogSerializer,
 )
-
-from accounts_endpoints.models import WaqaUser, DelegatedAccess
-from organization_endpoints.models import Organization, OrganizationApiKey, OrganizationUser
-from devices_endpoints.models import Device, DeviceKey
-
-from core.utils import hash_api_key
-from core.utils_crypto import verify_ed25519_signature
-
+from . import services
 
 # ============================================================
-# Create Session
+# Permissions & pagination
 # ============================================================
+class IsOrganizationRequest(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return getattr(request, "organization", None) is not None
+class DefaultPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = "page_size"
+    max_page_size = 100
 
-@api_view(["POST"])
-def create_session(request):
+class OrgScopedThrottle(ScopedRateThrottle):
+    """Per-organization throttling (auth'd requests)."""
+    def get_cache_key(self, request, view):
+        org = getattr(request, "organization", None)
+        if org is None:
+            return None
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": str(org.id),
+        }
 
-    serializer = CreateSessionSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
+# ============================================================
+# 1. Create Session + Issue Challenge
+#    POST /api/verification/sessions/create/
+# ============================================================
+class CreateSessionAndChallengeView(APIView):
 
-    org_key           = serializer.validated_data["organization_api_key"]
-    external_user_ref = serializer.validated_data["external_user_ref"]
-    org_operation_ref = serializer.validated_data["org_operation_ref"]
-    operation_type    = serializer.validated_data["operation_type"]
-
-    # 1 - تحقق من الـ API Key
-    try:
-        key_hash = hash_api_key(org_key)
-        api_key  = OrganizationApiKey.objects.get(key_hash=key_hash, is_active=True)
-    except OrganizationApiKey.DoesNotExist:
-        return Response({"error": "INVALID_API_KEY"}, status=status.HTTP_401_UNAUTHORIZED)
-
-    organization = api_key.organization
-
-    # 2 - تحقق من المستخدم
-    try:
-        org_user = OrganizationUser.objects.get(
-            organization=organization,
-            external_user_ref=external_user_ref,
-            status="linked"
+    authentication_classes = [OrganizationAPIKeyAuthentication]
+    permission_classes = [IsOrganizationRequest]
+    throttle_classes = [OrgScopedThrottle]
+    throttle_scope = "verify_create"
+    def post(self, request):
+        # device_id is optional at this stage; the device identifies itself at /verify/.
+        class _Input(CreateSessionSerializer):
+            device_id = drf_serializers.UUIDField(
+                required=False, write_only=True, allow_null=True
+            )
+        serializer = _Input(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        organization = request.organization
+        client_ip = services.get_client_ip(request)
+        user_agent = services.get_user_agent(request)
+        org_user = (
+            OrganizationUser.objects
+            .select_related("waqa_user")
+            .filter(
+                organization=organization,
+                external_user_ref=data["external_user_ref"],
+            )
+            .first()
         )
-    except OrganizationUser.DoesNotExist:
-        return Response({"error": "USER_NOT_FOUND"}, status=status.HTTP_404_NOT_FOUND)
-
-    # 3 - تحقق من تكرار العملية
-    if VerificationSession.objects.filter(
-        organization=organization,
-        org_operation_ref=org_operation_ref
-    ).exists():
-        return Response({"error": "OPERATION_ALREADY_EXISTS"}, status=status.HTTP_409_CONFLICT)
-
-    # 4 - أنشئ الجلسة
-    expires_at = timezone.now() + timedelta(minutes=2)
-
-    session = VerificationSession.objects.create(
-        organization=organization,
-        org_user=org_user,
-        org_operation_ref=org_operation_ref,
-        operation_type=operation_type,
-        nonce=secrets.token_hex(16),
-        status="challenge_issued",
-        expires_at=expires_at
-    )
-
-    # 5 - أنشئ التحدي
-    challenge_payload = {
-        "session_id": str(session.id),
-        "nonce": secrets.token_hex(32),
-        "expires_at": expires_at.isoformat()
-    }
-
-    challenge_bytes = json.dumps(
-        challenge_payload,
-        sort_keys=True,
-        separators=(",", ":")
-    )
-
-    challenge = VerificationChallenge.objects.create(
-        session=session,
-        challenge_bytes=challenge_bytes,
-        attempt_number=1,
-        expires_at=expires_at
-    )
-
-    return Response({
-        "message": "SESSION_CREATED",
-        "session_id": str(session.id),
-        "challenge": challenge_payload,
-        "status": "challenge_issued",
-        "expires_at": expires_at
-    }, status=status.HTTP_201_CREATED)
-
-
+        if org_user is None:
+            services.write_audit(
+                organization_id=organization.id,
+                actor_type=AuditLog.ActorType.ORG,
+                actor_id=organization.id,
+                action="create_session",
+                result=AuditLog.Result.FAIL,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                metadata={
+                    "reason": "org_user_not_found",
+                    "external_user_ref": data["external_user_ref"],
+                },
+            )
+            return Response(
+                {"detail": "User reference not found for this organization."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        try:
+            session, challenge = services.create_session_and_issue_challenge(
+                organization=organization,
+                org_user=org_user,
+                org_operation_ref=data["org_operation_ref"],
+                operation_type=data["operation_type"],
+                client_ip=client_ip,
+                user_agent=user_agent,
+            )
+        except IntegrityError:
+            services.write_audit(
+                organization_id=organization.id,
+                actor_type=AuditLog.ActorType.ORG,
+                actor_id=organization.id,
+                action="create_session",
+                result=AuditLog.Result.FAIL,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                metadata={
+                    "reason": "duplicate_org_operation_ref",
+                    "org_operation_ref": data["org_operation_ref"],
+                },
+            )
+            return Response(
+                {"detail": "A session with this operation reference already exists."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        services.write_audit(
+            organization_id=organization.id,
+            session_id=session.id,
+            actor_type=AuditLog.ActorType.ORG,
+            actor_id=organization.id,
+            action="create_session",
+            result=AuditLog.Result.OK,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            metadata={
+                "operation_type": data["operation_type"],
+                "challenge_id": str(challenge.id),
+            },
+        )
+        return Response(
+            {
+                "session_id": str(session.id),
+                "challenge_bytes": challenge.challenge_bytes,
+                "challenge_expires_at": challenge.expires_at,
+                "session_status": session.status,
+                "session": SessionStatusSerializer(session).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 # ============================================================
-# Verify Session
+# 2. Verify Device Signature
+#    POST /api/verification/sessions/<id>/verify/
 # ============================================================
+class VerifyDeviceSignatureView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "verify_signature"
+    class _Input(drf_serializers.Serializer):
+        device_id = drf_serializers.UUIDField()
+        signature = drf_serializers.CharField(max_length=4096, trim_whitespace=True)
 
-@api_view(['POST'])
-@transaction.atomic
-def verify_session(request, session_id):
+        def validate_signature(self, value):
+            value = value.strip()
+            if not value:
+                raise drf_serializers.ValidationError("Signature is required")
+            try:
+                base64.b64decode(value, validate=True)
+            except Exception:
+                raise drf_serializers.ValidationError("Invalid signature format")
+            return value
+    def post(self, request, session_id):
+        serializer = self._Input(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
 
-    challenge_id = request.data.get("challenge_id")
-    signature    = request.data.get("signature")
-    device_id    = request.data.get("device_id")
+        client_ip = services.get_client_ip(request)
+        user_agent = services.get_user_agent(request)
 
-    try:
-        session   = VerificationSession.objects.select_for_update().get(id=session_id)
-        challenge = VerificationChallenge.objects.get(id=challenge_id, session=session)
-
-        # 1 - انتهاء الجلسة
-        if session.expires_at < timezone.now():
-            return Response({"error": "SESSION_EXPIRED"}, status=400)
-
-        # 2 - تحقق من التحدي
-        if not challenge.is_active or challenge.is_used:
-            return Response({"error": "INVALID_CHALLENGE"}, status=400)
-
-        if challenge.expires_at < timezone.now():
-            return Response({"error": "CHALLENGE_EXPIRED"}, status=400)
-
-        # 3 - الجهاز
-        device = Device.objects.get(id=device_id, is_active=True)
-
-        # 4 - primary vs delegate
-        if device.user_id == session.org_user.user_id:
-            actor_type = "primary"
-        else:
-            is_delegate = DelegatedAccess.objects.filter(
-                primary_user_id=session.org_user.user_id,
-                delegate_user_id=device.user_id,
-                status='active'
-            ).exists()
-
-            if not is_delegate:
-                return Response({"error": "NOT_AUTHORIZED"}, status=403)
-
-            actor_type = "delegate"
-
-        # 5 - المفتاح
-        device_key = DeviceKey.objects.get(
-            device=device,
-            organization=session.organization,
-            is_active=True
+        try:
+            session, decision_token = services.verify_signature_and_decide(
+                session_id=session_id,
+                device_id=data["device_id"],
+                signature_b64=data["signature"],
+            )
+        except ValueError as e:
+            reason = str(e)
+            services.write_audit(
+                session_id=session_id,
+                device_id=data["device_id"],
+                actor_type=AuditLog.ActorType.USER,
+                action="verify_signature",
+                result=AuditLog.Result.FAIL,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                metadata={"reason": reason},
+            )
+            return Response({"detail": reason}, status=status.HTTP_400_BAD_REQUEST)
+        services.write_audit(
+            organization_id=session.organization_id,
+            session_id=session.id,
+            device_id=data["device_id"],
+            actor_type=AuditLog.ActorType.USER,
+            action="verify_signature",
+            result=(
+                AuditLog.Result.OK
+                if session.status == VerificationSession.Status.VERIFIED
+                else AuditLog.Result.FAIL
+            ),
+            ip_address=client_ip,
+            user_agent=user_agent,
+            metadata={
+                "session_status": session.status,
+                "failure_reason": session.failure_reason,
+                "actor_type": session.verified_by_actor_type,
+            },
+        )
+        return Response(
+            {
+                "session": SessionStatusSerializer(session).data,
+                "decision": session.status,
+                "decision_token": decision_token,  # null if denied
+            },
+            status=status.HTTP_200_OK,
         )
 
-        # 6 - التحقق من التوقيع
-        is_valid = verify_ed25519_signature(
-            public_key_b64=device_key.public_key,
-            message=challenge.challenge_bytes,
-            signature_b64=signature
+# ============================================================
+# 3. Verify Decision Token (org confirms a token later)
+#    POST /api/verification/sessions/<id>/verify-token/
+# ============================================================
+class VerifyDecisionTokenView(APIView):
+    authentication_classes = [OrganizationAPIKeyAuthentication]
+    permission_classes = [IsOrganizationRequest]
+    throttle_classes = [OrgScopedThrottle]
+    throttle_scope = "verify_read"
+
+    def post(self, request, session_id):
+        token = (request.data.get("decision_token") or "").strip()
+        if not token:
+            return Response(
+                {"detail": "decision_token is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ok = services.verify_decision_token(
+            organization=request.organization,
+            session_id=session_id,
+            token=token,
+        )
+        services.write_audit(
+            organization_id=request.organization.id,
+            session_id=session_id,
+            actor_type=AuditLog.ActorType.ORG,
+            actor_id=request.organization.id,
+            action="verify_decision_token",
+            result=AuditLog.Result.OK if ok else AuditLog.Result.FAIL,
+            ip_address=services.get_client_ip(request),
+            user_agent=services.get_user_agent(request),
+        )
+        if not ok:
+            return Response(
+                {"valid": False, "detail": "Invalid or expired decision token."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        return Response({"valid": True}, status=status.HTTP_200_OK)
+
+# ============================================================
+# 4. Session Status (poll)
+#    GET /api/verification/sessions/<id>/status/
+# ============================================================
+class SessionStatusView(APIView):
+    authentication_classes = [OrganizationAPIKeyAuthentication]
+    permission_classes = [IsOrganizationRequest]
+    throttle_classes = [OrgScopedThrottle]
+    throttle_scope = "verify_read"
+
+    def get(self, request, session_id):
+        session = get_object_or_404(
+            VerificationSession,
+            id=session_id,
+            organization=request.organization,
+        )
+        session.update_expired_status()
+        return Response(SessionStatusSerializer(session).data)
+    
+# ============================================================
+# 5. Cancel Session
+#    POST /api/verification/sessions/<id>/cancel/
+# ============================================================
+class CancelSessionView(APIView):
+    authentication_classes = [OrganizationAPIKeyAuthentication]
+    permission_classes = [IsOrganizationRequest]
+    def post(self, request, session_id):
+        client_ip = services.get_client_ip(request)
+        user_agent = services.get_user_agent(request)
+
+        session = get_object_or_404(
+            VerificationSession,
+            id=session_id,
+            organization=request.organization,
         )
 
-        if is_valid:
-            challenge.is_used   = True
-            challenge.is_active = False
-            challenge.used_at   = timezone.now()
-            challenge.save()
-
-            session.status                 = "verified"
-            session.verified_at            = timezone.now()
-            session.device_id              = device.id
-            session.verified_by_user       = device.user
-            session.verified_by_actor_type = actor_type
-            session.save()
-
-            return Response({"status": "verified"})
-
-        else:
-            session.attempt_count += 1
-
-            if session.attempt_count >= session.max_attempts:
-                session.status         = "failed"
-                session.failure_reason = "max_attempts_reached"
-
-            session.save()
-
-            return Response({"error": "INVALID_SIGNATURE"}, status=400)
-
-    except VerificationSession.DoesNotExist:
-        return Response({"error": "SESSION_NOT_FOUND"}, status=404)
-    except Exception as e:
-        return Response({"error": str(e)}, status=500)
-
+        if not services.cancel_session(session):
+            return Response(
+                {"detail": "Session is already in a final state."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        services.write_audit(
+            organization_id=request.organization.id,
+            session_id=session.id,
+            actor_type=AuditLog.ActorType.ORG,
+            actor_id=request.organization.id,
+            action="cancel_session",
+            result=AuditLog.Result.OK,
+            ip_address=client_ip,
+            user_agent=user_agent,
+        )
+        return Response(SessionStatusSerializer(session).data)
 
 # ============================================================
-# Get Session Status
+# 6. List Sessions (org dashboard)
+#    GET /api/verification/sessions/
 # ============================================================
+class ListSessionsView(generics.ListAPIView):
+    authentication_classes = [OrganizationAPIKeyAuthentication]
+    permission_classes = [IsOrganizationRequest]
+    serializer_class = SessionStatusSerializer
+    pagination_class = DefaultPagination
 
-@api_view(["GET"])
-def get_session_status(request, session_id):
-    try:
-        session = VerificationSession.objects.get(id=session_id)
-    except VerificationSession.DoesNotExist:
-        return Response({"error": "SESSION_NOT_FOUND"}, status=status.HTTP_404_NOT_FOUND)
+    def get_queryset(self):
+        qs = VerificationSession.objects.filter(organization=self.request.organization)
 
-    if session.status in ["pending", "challenge_issued", "awaiting_user"] and session.expires_at < timezone.now():
-        session.status         = "expired"
-        session.failure_reason = "session_expired"
-        session.save()
-
-    serializer = SessionStatusSerializer(session)
-
-    return Response({
-        "session_id":        str(session.id),
-        "status":            serializer.data["status"],
-        "operation_type":    serializer.data["operation_type"],
-        "org_operation_ref": serializer.data["org_operation_ref"],
-        "verified_at":       serializer.data["verified_at"],
-        "expires_at":        serializer.data["expires_at"],
-        "failure_reason":    serializer.data["failure_reason"],
-    }, status=status.HTTP_200_OK)
-
+        params = self.request.query_params
+        if v := params.get("status"):
+            qs = qs.filter(status=v)
+        if v := params.get("operation_type"):
+            qs = qs.filter(operation_type=v)
+        if v := params.get("org_operation_ref"):
+            qs = qs.filter(org_operation_ref=v)
+        if v := params.get("from"):
+            qs = qs.filter(created_at__gte=v)
+        if v := params.get("to"):
+            qs = qs.filter(created_at__lte=v)
+        return qs.order_by("-created_at")
 
 # ============================================================
-# Cancel Session
+# 7. List Challenges for a session (forensics)
+#    GET /api/verification/sessions/<id>/challenges/
+# ============================================================
+class ListSessionChallengesView(generics.ListAPIView):
+    authentication_classes = [OrganizationAPIKeyAuthentication]
+    permission_classes = [IsOrganizationRequest]
+    serializer_class = VerificationChallengeSerializer
+    pagination_class = DefaultPagination
+
+    def get_queryset(self):
+        session = get_object_or_404(
+            VerificationSession,
+            id=self.kwargs["session_id"],
+            organization=self.request.organization,
+        )
+        return session.challenges.order_by("-attempt_number")
+
+# ============================================================
+# 8. Audit Logs
+#    GET /api/verification/audit-logs/
+# ============================================================
+class AuditLogListView(generics.ListAPIView):
+    authentication_classes = [OrganizationAPIKeyAuthentication]
+    permission_classes = [IsOrganizationRequest]
+    serializer_class = AuditLogSerializer
+    pagination_class = DefaultPagination
+
+    def get_queryset(self):
+        qs = AuditLog.objects.filter(organization_id=self.request.organization.id)
+
+        params = self.request.query_params
+        if v := params.get("session_id"):
+            qs = qs.filter(session_id=v)
+        if v := params.get("device_id"):
+            qs = qs.filter(device_id=v)
+        if v := params.get("action"):
+            qs = qs.filter(action=v)
+        if v := params.get("result"):
+            qs = qs.filter(result=v)
+        if v := params.get("actor_type"):
+            qs = qs.filter(actor_type=v)
+        if v := params.get("from"):
+            qs = qs.filter(created_at__gte=v)
+        if v := params.get("to"):
+            qs = qs.filter(created_at__lte=v)
+
+        return qs.order_by("-created_at")
+
+# ============================================================
+# 9. Key Usage Logs
+#    GET /api/verification/key-usage-logs/
 # ============================================================
 
-@api_view(["POST"])
-@transaction.atomic
-def cancel_session(request, session_id):
-    try:
-        session = VerificationSession.objects.select_for_update().get(id=session_id)
-    except VerificationSession.DoesNotExist:
-        return Response({"error": "SESSION_NOT_FOUND"}, status=status.HTTP_404_NOT_FOUND)
+class KeyUsageLogListView(generics.ListAPIView):
+    authentication_classes = [OrganizationAPIKeyAuthentication]
+    permission_classes = [IsOrganizationRequest]
+    serializer_class = KeyUsageLogSerializer
+    pagination_class = DefaultPagination
 
-    if session.status in ["verified", "failed", "expired", "cancelled", "denied"]:
-        return Response({"error": "SESSION_ALREADY_FINALIZED"}, status=status.HTTP_400_BAD_REQUEST)
+    def get_queryset(self):
+        qs = KeyUsageLog.objects.filter(organization_id=self.request.organization.id)
 
-    VerificationChallenge.objects.filter(
-        session=session,
-        is_active=True
-    ).update(is_active=False)
-
-    session.status         = "cancelled"
-    session.failure_reason = "session_cancelled"
-    session.save()
-
-    return Response({
-        "message":    "SESSION_CANCELLED",
-        "session_id": str(session.id)
-    }, status=status.HTTP_200_OK)
+        params = self.request.query_params
+        if v := params.get("session_id"):
+            qs = qs.filter(session_id=v)
+        if v := params.get("device_id"):
+            qs = qs.filter(device_id=v)
+        if v := params.get("action"):
+            qs = qs.filter(action=v)
+        if v := params.get("result"):
+            qs = qs.filter(result=v)
+        return qs.order_by("-created_at")
