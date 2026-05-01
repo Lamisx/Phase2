@@ -61,16 +61,37 @@ class SessionStatusSerializer(serializers.ModelSerializer):
             "failure_reason",
         ]
 
-class LinkUserSerializer(serializers.Serializer):
-    organization_id = serializers.UUIDField()
-    user_id = serializers.UUIDField()
-    external_user_ref = serializers.CharField()
+
+class LinkUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrganizationUser
+        fields = ['organization', 'user', 'external_user_ref']
+
+    def validate(self, data):
+        organization = data['organization']
+        user = data['user']
+        external_user_ref = data['external_user_ref']
+
+        # ❌ منع التكرار (user + organization)
+        if OrganizationUser.objects.filter(
+            organization=organization,
+            user=user
+        ).exists():
+            raise serializers.ValidationError({
+                "detail": "User already linked to this organization"
+            })
+
+        # ❌ منع تكرار external_user_ref داخل نفس المنظمة
+        if OrganizationUser.objects.filter(
+            organization=organization,
+            external_user_ref=external_user_ref
+        ).exists():
+            raise serializers.ValidationError({
+                "detail": "external_user_ref already exists in this organization"
+            })
+
+        return data
 
     def create(self, validated_data):
-        from .models import OrganizationUser
+        return OrganizationUser.objects.create(**validated_data)
 
-        return OrganizationUser.objects.create(
-            organization_id=validated_data["organization_id"],
-            user_id=validated_data["user_id"],
-            external_user_ref=validated_data["external_user_ref"],
-        )

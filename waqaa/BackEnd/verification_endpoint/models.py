@@ -41,7 +41,7 @@ class VerificationSession(models.Model):
     verified_by_user            = models.ForeignKey(WaqaUser, on_delete=models.SET_NULL, null=True,blank=True, related_name="verified_sessions",)##هل التحقق تم بواسطة الـ primary？
     verified_by_actor_type      = models.CharField(max_length=10, choices=ActorType.choices, null=True, blank=True)# for audit
     org_operation_ref           = models.CharField(max_length=255)
-    operation_type              = models.CharField(max_length=100, choices=OperationType.choices)
+    operation_type              = models.CharField(max_length=200, choices=OperationType.choices)
     operation_hash              = models.CharField(max_length=128,null=True, blank=True)
     operation_payload_encrypted = models.TextField(null=True, blank=True)
     status                      = models.CharField(max_length=20,default=Status.PENDING, choices=Status.choices)

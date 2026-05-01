@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'devices_endpoints',
     'organization_endpoints',
     'verification_endpoint',
+    'devices',
 ]
 
 MIDDLEWARE = [
@@ -51,6 +52,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'organization_endpoints.middleware.api_key_middleware.APIKeyMiddleware',
+
 ]
 
 ROOT_URLCONF = 'core.urls'
