@@ -41,7 +41,7 @@ class VerificationSession(models.Model):
     verified_by_user            = models.ForeignKey(WaqaUser, on_delete=models.SET_NULL, null=True,blank=True, related_name="verified_sessions",)##هل التحقق تم بواسطة الـ primary？
     verified_by_actor_type      = models.CharField(max_length=10, choices=ActorType.choices, null=True, blank=True)# for audit
     org_operation_ref           = models.CharField(max_length=255)
-    operation_type              = models.CharField(max_length=200, choices=OperationType.choices)
+    operation_type              = models.CharField(max_length=255, choices=OperationType.choices)
     operation_hash              = models.CharField(max_length=128,null=True, blank=True)
     operation_payload_encrypted = models.TextField(null=True, blank=True)
     status                      = models.CharField(max_length=20,default=Status.PENDING, choices=Status.choices)
@@ -122,6 +122,15 @@ class VerificationSession(models.Model):
         if commit:
             self.save(update_fields=['status', 'failure_reason'])
         return True
+    def mark_as_used(self, commit: bool = True) -> bool:
+        if self.is_used or not self.is_active:
+            return False
+        self.is_used = True
+        self.is_active = False
+        self.used_at = timezone.now()
+        if commit:
+            self.save(update_fields=['is_used', 'is_active', 'used_at'])
+        return True
 # ============================================================
 # Verification Challenge
 # ============================================================
@@ -162,24 +171,12 @@ class VerificationChallenge(models.Model):
     
     @property
     def is_valid(self) -> bool:
-        """التحدي صالح للاستخدام — نشط، غير مستخدم، وغير منتهي."""
         return (
             self.is_active
             and not self.is_used
             and not self.is_expired
         )
-    '''  هل احتاج هذا ؟ او لا ؟ 
-    def mark_as_used(self, commit: bool = True) -> bool:
-        """يعلّم التحدي كمستخدم ويوقفه."""
-        if self.is_used or not self.is_active:
-            return False
-        self.is_used = True
-        self.is_active = False
-        self.used_at = timezone.now()
-        if commit:
-            self.save(update_fields=['is_used', 'is_active', 'used_at'])
-        return True
-    '''
+ 
 # ============================================================
 # AuditLog
 # ============================================================

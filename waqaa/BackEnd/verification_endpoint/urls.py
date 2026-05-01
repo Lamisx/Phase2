@@ -1,11 +1,32 @@
 from django.urls import path
-from . import views
+
+from .views import (
+    CreateSessionAndChallengeView,
+    VerifyDeviceSignatureView,
+    VerifyDecisionTokenView,
+    SessionStatusView,
+    CancelSessionView,
+    ListSessionsView,
+    ListSessionChallengesView,
+    AuditLogListView,
+    KeyUsageLogListView,
+)
+
+app_name = "verification_endpoint"
 
 urlpatterns = [
+    # Sessions
+    path("sessions/", ListSessionsView.as_view(), name="session-list"),
+    path("sessions/create/", CreateSessionAndChallengeView.as_view(), name="session-create"),
+    path("sessions/<uuid:session_id>/status/", SessionStatusView.as_view(), name="session-status"),
+    path("sessions/<uuid:session_id>/cancel/", CancelSessionView.as_view(), name="session-cancel"),
+    path("sessions/<uuid:session_id>/verify/", VerifyDeviceSignatureView.as_view(), name="session-verify"),
+    path("sessions/<uuid:session_id>/verify-token/", VerifyDecisionTokenView.as_view(), name="session-verify-token"),
 
-    # ─── Session ─────────────────────────────────────
-    path("sessions/create/",                    views.create_session,     name="create_session"),
-    path("sessions/<uuid:session_id>/verify/",  views.verify_session,     name="verify_session"),
-    path("sessions/<uuid:session_id>/status/",  views.get_session_status, name="get_session_status"),
-    path("sessions/<uuid:session_id>/cancel/",  views.cancel_session,     name="cancel_session"),
+    # Forensics
+    path("sessions/<uuid:session_id>/challenges/", ListSessionChallengesView.as_view(), name="session-challenges"),
+
+    # Logs
+    path("audit-logs/", AuditLogListView.as_view(), name="audit-logs"),
+    path("key-usage-logs/", KeyUsageLogListView.as_view(), name="key-usage-logs"),
 ]
