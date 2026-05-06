@@ -10,5 +10,4 @@ urlpatterns = [
     path("keys/device/<uuid:device_id>/", views.list_device_keys),
     path("keys/<uuid:device_key_id>/revoke/", views.revoke_device_key),
 
-
 ]

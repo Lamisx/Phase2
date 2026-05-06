@@ -1,7 +1,7 @@
 import uuid
 from django.db import models
 from django.core.exceptions import ValidationError
-from django.utils import timezone,timedelta
+from datetime import timedelta,timezone
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from .managers import AccountUserManager
 
@@ -32,10 +32,10 @@ class RegistrationSession(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    national_id_hmac = models.CharField(max_length=128,max_length=10, db_index=True)
+    national_id_hmac = models.CharField(min_length=10,max_length=10, db_index=True)
 
     username = models.CharField(max_length=20, null=True, blank=True)
-    password_hash = models.CharField( max_length=120, null=True, blank=True)
+    password_hash = models.CharField( min_length=8, null=True, blank=True)
     display_name = models.CharField(max_length=20, null=True, blank=True)
     phone = models.CharField(max_length=10, null=True, blank=True)
     email = models.CharField(max_length=30, null=True, blank=True)

@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.hashers import make_password, check_password
 from core.utils import hash_national_id
 from django.core.validators import RegexValidator
-from .models import AccountUser, UserDelegation 
+from .models import AccountUser, UserDelegation ,WaqaUser
 import re
 
 # إذا النظام سعودي فقط
@@ -72,8 +72,8 @@ class LoginSerializer(serializers.Serializer):
         username = data.get("username").strip().lower()
         password = data.get("password")
         try:
-            user = AccountUser.objects.get(username=username)
-        except AccountUser.DoesNotExist:
+            user = WaqaUser.objects.get(username=username)
+        except WaqaUser.DoesNotExist:
             raise serializers.ValidationError("Invalid username or password.")
 
         if not user.password_hash:
@@ -101,7 +101,9 @@ class AccountSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True)
 
 
 # ============================================================

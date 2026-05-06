@@ -3,15 +3,15 @@ from datetime import timedelta
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
-from django.db import models
-from .models import AccountUser, UserDelegation
 from rest_framework.exceptions import (
     NotFound,
     PermissionDenied,
     ValidationError,
 )
 
+from core.utils_crypto import hash_national_id
 
+from .models import AccountUser, UserDelegation
 
 
 class RegistrationService:

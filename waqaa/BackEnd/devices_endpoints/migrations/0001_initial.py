@@ -35,9 +35,9 @@ class Migration(migrations.Migration):
             name='Device',
             fields=[
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('label', models.TextField(blank=True, null=True)),
-                ('platform', models.TextField(choices=[('android', 'Android'), ('ios', 'iOS'), ('web', 'Web'), ('desktop', 'Desktop')])),
-                ('app_instance_id', models.TextField(blank=True, null=True)),
+                ('label', models.CharField(blank=True, max_length=100, null=True)),
+                ('platform', models.CharField(choices=[('android', 'Android'), ('ios', 'iOS'), ('web', 'Web'), ('desktop', 'Desktop')], max_length=20)),
+                ('app_instance_id', models.CharField(blank=True, max_length=100, null=True)),
                 ('is_active', models.BooleanField(default=True)),
                 ('is_primary_device', models.BooleanField(default=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
