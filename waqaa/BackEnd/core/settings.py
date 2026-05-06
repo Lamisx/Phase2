@@ -97,6 +97,15 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 # Database
 DATABASES = {
+<<<<<<< HEAD
+        'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'postgres',
+        'USER': 'postgres',
+        'PASSWORD': 'Layanwaqaa&99',
+        'HOST': 'db.yluxmcswewvmmlprpgjh.supabase.co',
+        'PORT': '5432',
+=======
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME":     env("DB_NAME", required=True),
@@ -105,6 +114,7 @@ DATABASES = {
         "HOST":     env("DB_HOST", required=True),
         "PORT":     env("DB_PORT", default="5432"),
         "CONN_MAX_AGE": env_int("DB_CONN_MAX_AGE", 60),
+>>>>>>> 3e8058b105db20eaa85db9b5f30bd7e1705edb71
     }
 }
 

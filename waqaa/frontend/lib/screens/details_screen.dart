@@ -1,74 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../widgets/shared_widgets.dart';
+import '../services/api_service.dart'; // ✅ مهم
 
 // ══════════════════════════════════════════════
-//  الواجهة الثانية — اسم المستخدم وكلمة المرور
+//  الواجهة الثالثة — رقم الجوال والبريد
 // ══════════════════════════════════════════════
-class DetailsScreen extends StatefulWidget {
+class ContactScreen extends StatefulWidget {
   final GlobalKey<FormState> formKey;
-  final TextEditingController usernameController;
-  final TextEditingController passwordController;
-  final TextEditingController confirmPasswordController;
-  final VoidCallback onNext;
+  final TextEditingController phoneController;
+  final TextEditingController emailController;
   final VoidCallback onBack;
+  final String sessionId; // ✅ مهم
 
-  const DetailsScreen({
+  const ContactScreen({
     super.key,
     required this.formKey,
-    required this.usernameController,
-    required this.passwordController,
-    required this.confirmPasswordController,
-    required this.onNext,
+    required this.phoneController,
+    required this.emailController,
     required this.onBack,
+    required this.sessionId,
   });
 
   @override
-  State<DetailsScreen> createState() => _DetailsScreenState();
+  State<ContactScreen> createState() => _ContactScreenState();
 }
 
-class _DetailsScreenState extends State<DetailsScreen> {
-  bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
-  String _passwordStrengthText = '';
-  Color _passwordStrengthColor = Colors.transparent;
-
-  void _checkPasswordStrength(String password) {
-    if (password.isEmpty) {
-      setState(() {
-        _passwordStrengthText = '';
-        _passwordStrengthColor = Colors.transparent;
-      });
-      return;
-    }
-    final hasUppercase = RegExp(r'[A-Z]').hasMatch(password);
-    final hasLowercase = RegExp(r'[a-z]').hasMatch(password);
-    final hasDigits = RegExp(r'[0-9]').hasMatch(password);
-    final hasSpecialChars = RegExp(
-      r'[!@#\$%^&*(),.?":{}|<>]',
-    ).hasMatch(password);
-
-    if (!(hasUppercase && hasLowercase && hasDigits && hasSpecialChars)) {
-      setState(() {
-        _passwordStrengthText =
-            'يجب أن تحتوي على أحرف كبيرة وصغيرة وأرقام ورموز';
-        _passwordStrengthColor = Colors.red;
-      });
-      return;
-    }
-    if (password.length >= 10) {
-      setState(() {
-        _passwordStrengthText = 'كلمة مرور قوية';
-        _passwordStrengthColor = Colors.green;
-      });
-    } else {
-      setState(() {
-        _passwordStrengthText = 'كلمة مرور متوسطة';
-        _passwordStrengthColor = Colors.orange;
-      });
-    }
-  }
-
+class _ContactScreenState extends State<ContactScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -88,119 +46,134 @@ class _DetailsScreenState extends State<DetailsScreen> {
                     const SizedBox(height: 10),
                     buildBackButton(widget.onBack),
                     const SizedBox(height: 30),
+
                     const Text(
-                      'تسجيل البيانات',
-                      textDirection: TextDirection.rtl,
+                      'يتبع',
                       style: TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
+
                     const SizedBox(height: 8),
+
                     const Text(
-                      'إنشاء اسم المستخدم و كلمة مرور قوية باستخدام مزيج من الأحرف والأرقام والرموز',
-                      textDirection: TextDirection.rtl,
-                      textAlign: TextAlign.right,
-                      style: TextStyle(fontSize: 12, color: Color(0xFF81C784)),
+                      'اكمال بيانات الحساب',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF81C784)),
                     ),
-                    const SizedBox(height: 30),
-                    fieldLabel('اسم المستخدم'),
+
+                    const SizedBox(height: 40),
+
+                    fieldLabel('رقم الجوال'),
                     const SizedBox(height: 10),
+
                     TextFormField(
-                      controller: widget.usernameController,
+                      controller: widget.phoneController,
+                      keyboardType: TextInputType.phone,
                       textAlign: TextAlign.right,
-                      textDirection: TextDirection.ltr,
+                      textDirection: TextDirection.rtl,
                       inputFormatters: [
-                        FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[a-zA-Z0-9_]'),
-                        ),
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
                       ],
-                      decoration: inputDecoration('ادخل اسم المستخدم'),
+                      decoration: inputDecoration('ادخل رقم الجوال'),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'اسم المستخدم مطلوب';
-                        if (v.contains(' '))
-                          return 'لا يُسمح بالمسافات في اسم المستخدم';
-                        if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(v))
-                          return 'اسم المستخدم يجب أن يكون بالإنجليزية فقط';
+                        if (v == null || v.isEmpty) return 'رقم الجوال مطلوب';
+                        if (v.length != 10)
+                          return 'رقم الجوال يجب أن يكون 10 أرقام بالضبط';
                         return null;
                       },
                     ),
-                    const SizedBox(height: 20),
-                    fieldLabel('كلمة المرور'),
+
+                    const SizedBox(height: 24),
+
+                    fieldLabel('البريد الالكتروني'),
                     const SizedBox(height: 10),
+
                     TextFormField(
-                      controller: widget.passwordController,
-                      obscureText: _obscurePassword,
+                      controller: widget.emailController,
+                      keyboardType: TextInputType.emailAddress,
                       textAlign: TextAlign.right,
                       textDirection: TextDirection.rtl,
-                      onChanged: _checkPasswordStrength,
-                      decoration: inputDecoration('ادخل كلمة المرور').copyWith(
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: Colors.white38,
-                          ),
-                          onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
-                          ),
-                        ),
-                      ),
+                      decoration: inputDecoration('ادخل البريد الالكتروني'),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'كلمة المرور مطلوبة';
-                        if (_passwordStrengthColor == Colors.red)
-                          return 'كلمة مرور ضعيفة جداً';
+                        if (v == null || v.isEmpty)
+                          return 'البريد الإلكتروني مطلوب';
+                        if (!v.endsWith('@gmail.com'))
+                          return 'يجب أن ينتهي البريد بـ @gmail.com';
                         return null;
                       },
                     ),
-                    const SizedBox(height: 20),
-                    fieldLabel('تأكيد كلمة المرور'),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: widget.confirmPasswordController,
-                      obscureText: _obscureConfirmPassword,
-                      textAlign: TextAlign.right,
-                      textDirection: TextDirection.rtl,
-                      decoration: inputDecoration('ادخل تأكيد كلمة المرور')
-                          .copyWith(
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscureConfirmPassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                                color: Colors.white38,
-                              ),
-                              onPressed: () => setState(
-                                () => _obscureConfirmPassword =
-                                    !_obscureConfirmPassword,
-                              ),
+
+                    const SizedBox(height: 50),
+
+                    // 🔥 زر الإرسال النهائي (إنشاء الحساب)
+                    buildButton('تسجيل', () async {
+                      if (!widget.formKey.currentState!.validate()) return;
+
+                      try {
+                        // ⏳ loading
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) =>
+                              const Center(child: CircularProgressIndicator()),
+                        );
+
+                        // 🔹 1. حفظ بيانات الاتصال
+                        bool contactSaved = await ApiService.setContact(
+                          sessionId: widget.sessionId,
+                          phone: widget.phoneController.text,
+                          email: widget.emailController.text,
+                        );
+
+                        if (!contactSaved) {
+                          throw Exception("فشل حفظ بيانات الاتصال");
+                        }
+
+                        // 🔹 2. إنشاء الحساب النهائي
+                        bool created = await ApiService.completeRegistration(
+                          widget.sessionId,
+                        );
+
+                        Navigator.pop(context);
+
+                        if (created) {
+                          showDialog(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: const Text("نجاح"),
+                              content: const Text("تم إنشاء الحساب بنجاح 🎉"),
+                              actions: [
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    Navigator.popUntil(
+                                      context,
+                                      (route) => route.isFirst,
+                                    );
+                                  },
+                                  child: const Text("حسناً"),
+                                ),
+                              ],
                             ),
+                          );
+                        }
+                      } catch (e) {
+                        Navigator.pop(context);
+                        print(e);
+
+                        showDialog(
+                          context: context,
+                          builder: (_) => const AlertDialog(
+                            title: Text("خطأ"),
+                            content: Text("حدث خطأ أثناء إنشاء الحساب"),
                           ),
-                      validator: (v) => (v != widget.passwordController.text)
-                          ? 'كلمات المرور غير متطابقة'
-                          : null,
-                    ),
-                    if (_passwordStrengthText.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          _passwordStrengthText,
-                          textDirection: TextDirection.rtl,
-                          style: TextStyle(
-                            color: _passwordStrengthColor,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 30),
-                    buildButton('تسجيل', () {
-                      if (widget.formKey.currentState!.validate()) {
-                        widget.onNext();
+                        );
                       }
                     }),
+
                     const SizedBox(height: 16),
                     buildFooter(),
                     const SizedBox(height: 20),

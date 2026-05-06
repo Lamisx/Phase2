@@ -1,8 +1,11 @@
 from django.utils import timezone
+import time
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .models import DelegatedAccess
+from .models import DelegatedAccess , RegistrationSession , WaqaUser
+from django.contrib.auth.hashers import make_password
+
 from .serializers import (
     RegisterSerializer,
     UserSerializer,
@@ -10,10 +13,100 @@ from .serializers import (
     AddDelegateSerializer,
     DelegateSerializer,
 )
-
 @api_view(["GET"])
 def health_check(request):
     return Response({"status": "server is running"})
+
+#تحقق من الهوية في عملية انشاء حساب
+
+@api_view(["POST"])
+def start_registration(request):
+    national_id = request.data.get("national_id")
+
+    # ✅ validation
+    if not national_id:
+        return Response(
+            {"error": "national_id is required"},
+            status=400
+        )
+
+    session = RegistrationSession.objects.create(
+        national_id=national_id
+    )
+
+    return Response({
+        "session_id": str(session.id)
+    })
+
+@api_view(["POST"])
+def mock_nafath(request):
+    session_id = request.data.get("session_id")
+    national_id = request.data.get("national_id")
+
+    if not session_id:
+        return Response({"error": "session_id required"}, status=400)
+
+    session = RegistrationSession.objects.get(id=session_id)
+
+    time.sleep(3)
+
+    if national_id.startswith("1"):
+        session.is_verified = True
+        session.status = "nafath_verified"
+        session.save()
+
+        return Response({
+            "verified": True,
+            "message": "Nafath verification successful"
+        })
+    else:
+        return Response({
+            "verified": False,
+            "message": "Nafath verification failed"
+        }, status=400)
+    
+@api_view(["POST"])
+def set_credentials(request):
+    session = RegistrationSession.objects.get(id=request.data.get("session_id"))
+
+    if not session.is_verified:
+        return Response({"error": "Not verified"}, status=400)
+
+    session.username = request.data.get("username")
+    session.password = make_password(request.data.get("password"))  
+    session.save()
+
+    return Response({"message": "Saved"})
+
+@api_view(["POST"])
+def set_contact(request):
+    session = RegistrationSession.objects.get(id=request.data.get("session_id"))
+
+    session.phone = request.data.get("phone")
+    session.email = request.data.get("email")
+    session.save()
+
+    return Response({"message": "Saved"})
+
+@api_view(["POST"])
+def complete_registration(request):
+    session = RegistrationSession.objects.get(id=request.data.get("session_id"))
+
+    user = WaqaUser.objects.create(
+        national_id=session.national_id,
+        username=session.username,
+        password=session.password,
+        phone=session.phone,
+        email=session.email,
+    )
+
+    session.status = "completed"
+    session.save()
+
+    return Response({
+        "message": "User created",
+        "user_id": str(user.id)
+    })
 # register endpoint
 @api_view(["POST"])
 def register(request):

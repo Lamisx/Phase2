@@ -1,25 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth.hashers import make_password, check_password
-
-from .models import WaqaUser, DelegatedAccess
 from core.utils import hash_national_id
 from django.core.validators import RegexValidator
+from .models import AccountUser, UserDelegation ,WaqaUser
 import re
-
-
-
-#------------
-# user 
-#-----------
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = WaqaUser
-        fields = ['id', 'username', 'display_name', 'email', 'phone', 'status', 'created_at', 'updated_at']
-
-
-# ------------------------
-# Auth
-# ------------------------
 
 # إذا النظام سعودي فقط
 phone_regex = RegexValidator(
@@ -33,66 +17,52 @@ national_id_regex = RegexValidator(
     message="رقم الهوية يجب أن يكون 10 أرقام"
 )
 
-class RegisterSerializer(serializers.Serializer):
-    username = serializers.CharField(required=True)
-    display_name = serializers.CharField(required=False, allow_blank=True)
-    email = serializers.EmailField(required=False, allow_blank=True)
-    phone = serializers.CharField(required=True, allow_blank=False)
-    national_id = serializers.CharField(required=True,write_only=True)
-    password = serializers.CharField(required=True,write_only=True,min_length=8)
-
-    
-
-    def validate_username(self, value):
-        value = value.strip().lower()
-        if WaqaUser.objects.filter(username=value).exists():
-            raise serializers.ValidationError("Username already taken.")
-        return value
-
-    def validate_email(self, value):
-        if value:
-            value = value.strip().lower()
-            pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-            
-            if not re.match(pattern, value):
-                raise serializers.ValidationError("Invalid email format.")
-            if WaqaUser.objects.filter(email=value).exists():
-                raise serializers.ValidationError("Email already registered.")
-        return value
-    
-
-    
-    def validate_phone(self, value):
-        if value:
-            cleaned = re.sub(r'(?!^\+)\D', '', value.strip())
-            phone_regex(cleaned)
-            
-            if WaqaUser.objects.filter(phone=cleaned).exists():
-                raise serializers.ValidationError("Phone number already registered.")
-            return cleaned
-        return value
+# ============================================================
+# StartRegistrationSerializer
+# ============================================================
+class StartRegistrationSerializer(serializers.Serializer):
+    national_id = serializers.CharField(required=True, write_only=True, max_length=10)
 
     def validate_national_id(self, value):
+        value = (value or "").strip()
         national_id_regex(value)
-        national_id_hmac = hash_national_id(value)
+        return value
+    
+class CompleteRegistrationSerializer(serializers.Serializer):
+    session_id = serializers.UUIDField(required=True)
+    username = serializers.CharField(required=True, max_length=20)
+    display_name = serializers.CharField(required=True, max_length=20)
+    password = serializers.CharField(required=True, write_only=True,min_length=8, max_length=128)
+    phone = serializers.CharField(required=True, max_length=20)
+    email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
 
-        if WaqaUser.objects.filter(national_id_hmac=national_id_hmac).exists():
-            raise serializers.ValidationError("National ID already registered.")
+    def validate_username(self, value):
+        return value.strip().lower()
 
-        return national_id_hmac
+    def validate_email(self, value):
+        if not value:
+            return None
+        return value.strip().lower()
 
-    def create(self, validated_data):
-        password = validated_data.pop("password")
-        national_id_hmac  = validated_data.pop("national_id")
+    def validate_phone(self, value):
+        import re
+        value = re.sub(r"\D", "", value or "")
+        phone_regex(value)
+        return value
+    
 
-        user = WaqaUser.objects.create(
-            password_hash=make_password(password),
-            national_id_hmac=national_id_hmac,
-            **validated_data
-        )
+class RegistrationSessionSerializer(serializers.ModelSerializer):
+    is_expired = serializers.BooleanField(read_only=True)
+    is_final = serializers.BooleanField(read_only=True)
 
-        return user
-
+    class Meta:
+        from .models import RegistrationSession
+        model = RegistrationSession
+        fields = [
+            "id", "status", "expires_at", "created_at",
+            "is_expired", "is_final",
+        ]
+        read_only_fields = fields
 
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
@@ -116,74 +86,64 @@ class LoginSerializer(serializers.Serializer):
         return data
 
 
-# ------------------------
-# Delegation
-# ------------------------
 
-class DelegateSerializer(serializers.ModelSerializer):
-    delegate_username = serializers.CharField(source='delegate_user.username', read_only=True)
-    delegate_displayname = serializers.CharField(source='delegate_user.display_name', read_only=True)
-    primary_username     = serializers.CharField(source='primary_user.username',      read_only=True)
+# ============================================================
+# Account
+# ============================================================
+class AccountSerializer(serializers.ModelSerializer):
 
     class Meta:
-        model = DelegatedAccess
+        model = AccountUser
         fields = [
-            'id',
-            #'delegate_user', يكشف معلومة داخلية بدون داعٍ 
-            'primary_username',#  ← مفيد للـ context | من هو صاحب التفويض الأصلي
-            'delegate_username',
-            'delegate_displayname',
-            'added_via',
-            'status',
-            'created_at',
-            'revoked_at',
+            "id", "username", "display_name", "email", "phone",
+            "status", "created_at", "updated_at",
         ]
+        read_only_fields = fields
 
 
-class AddDelegateSerializer(serializers.Serializer):
-    primary_user_id = serializers.UUIDField()
-    delegate_user_id = serializers.UUIDField()
-    added_via = serializers.ChoiceField(choices=['qr', 'otp'])
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True)
 
-    def validate(self, data):
-        primary_user_id = data["primary_user_id"]
-        delegate_user_id = data["delegate_user_id"]
 
-        if primary_user_id == delegate_user_id:
-            raise serializers.ValidationError("You cannot delegate yourself.")
-
-        users = WaqaUser.objects.filter(
-          id__in=[primary_user_id, delegate_user_id]
+# ============================================================
+# Delegation
+# ============================================================
+class DelegationSerializer(serializers.ModelSerializer):
+    owner_username = serializers.CharField(
+        source="owner_account.username", read_only=True
     )
-        users_dict = {user.id: user for user in users}
+    delegated_username = serializers.CharField(
+        source="delegated_account.username", read_only=True
+    )
+    delegated_display_name = serializers.CharField(
+        source="delegated_account.display_name", read_only=True
+    )
+    is_expired = serializers.BooleanField(read_only=True)
 
-        primary_user  = users_dict.get(primary_user_id)
-        delegate_user = users_dict.get(delegate_user_id)
+    class Meta:
+        model = UserDelegation
+        fields = [
+            "id",
+            "owner_username",
+            "delegated_username",
+            "delegated_display_name",
+            "delegation_method",
+            "status",
+            "expires_at",
+            "revoked_at",
+            "is_expired",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
 
-        if not primary_user:
-            raise serializers.ValidationError("Primary user not found.")
-        if not delegate_user:
-            raise serializers.ValidationError("Delegate user not found.")
 
-
-        exists = DelegatedAccess.objects.filter(
-            primary_user=primary_user,
-            delegate_user=delegate_user,
-            status="active"
-        ).exists()
-
-        if exists:
-            raise serializers.ValidationError("This user is already delegated.")
-
-        data["primary_user"] = primary_user
-        data["delegate_user"] = delegate_user
-        return data
-
-    def create(self, validated_data):
-        delegation = DelegatedAccess.objects.create(
-            primary_user=validated_data["primary_user"],
-            delegate_user=validated_data["delegate_user"],
-            added_via=validated_data["added_via"],
-            status="active"
-        )
-        return delegation
+class CreateDelegationSerializer(serializers.Serializer):
+   
+    delegated_account_id = serializers.UUIDField(required=True)
+    delegation_method = serializers.ChoiceField(
+        choices=[UserDelegation.METHOD_QR, UserDelegation.METHOD_OTP],
+        required=True,
+    )
+    expires_at = serializers.DateTimeField(required=False, allow_null=True)

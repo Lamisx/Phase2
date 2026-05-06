@@ -101,12 +101,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           );
                           return;
                         }
-                        print("Pressed");
 
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => NafathScreen(isLogin: true),
+                            builder: (context) => NafathScreen(
+                              sessionId: "",
+                              nationalId: idController.text,
+                            ),
                           ),
                         );
                       },
@@ -137,13 +139,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         onTap: () {
                           final formKey = GlobalKey<FormState>();
                           final idCtrl = TextEditingController();
+
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => IdScreen(
-                                formKey: GlobalKey<FormState>(),
-                                idController: TextEditingController(),
-                                onNext: () {},
+                                formKey: formKey,
+                                idController: idCtrl,
                               ),
                             ),
                           );

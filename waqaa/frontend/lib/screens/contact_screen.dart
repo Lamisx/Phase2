@@ -11,6 +11,7 @@ class ContactScreen extends StatefulWidget {
   final TextEditingController emailController;
   final VoidCallback onSubmit;
   final VoidCallback onBack;
+  final String sessionId; // ✅ جديد
 
   const ContactScreen({
     super.key,
@@ -19,6 +20,7 @@ class ContactScreen extends StatefulWidget {
     required this.emailController,
     required this.onSubmit,
     required this.onBack,
+    required this.sessionId,
   });
 
   @override
