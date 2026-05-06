@@ -2,12 +2,8 @@ import 'package:flutter/material.dart';
 import 'id_screen.dart';
 import 'details_screen.dart';
 import 'contact_screen.dart';
-//import 'AddTrustDevice.dart';
 import 'trusted_device.dart';
 
-// ══════════════════════════════════════════════
-//  المنسّق الرئيسي للتسجيل (يتحكم في PageView)
-// ══════════════════════════════════════════════
 class RegistrationFlow extends StatefulWidget {
   const RegistrationFlow({super.key});
 
@@ -59,82 +55,23 @@ class _RegistrationFlowState extends State<RegistrationFlow> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          backgroundColor: const Color(0xFF252A34),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+      builder: (context) => AlertDialog(
+        title: const Text("تم"),
+        content: const Text("تم إنشاء الحساب بنجاح"),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TrustedDevicesPage(),
+                ),
+              );
+            },
+            child: const Text("حسناً"),
           ),
-          title: const Row(
-            children: [
-              Icon(Icons.mark_email_read, color: Color(0xFF2E8B57), size: 28),
-              SizedBox(width: 10),
-              Text(
-                'تم الإرسال!',
-                style: TextStyle(color: Colors.white, fontSize: 20),
-              ),
-            ],
-          ),
-          content: RichText(
-            textDirection: TextDirection.rtl,
-            text: TextSpan(
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-                height: 1.6,
-              ),
-              children: [
-                const TextSpan(
-                  text: 'تم إرسال رسالة تأكيد إلى بريدك الإلكتروني\n',
-                ),
-                TextSpan(
-                  text: _emailController.text,
-                  style: const TextStyle(
-                    color: Color(0xFF81C784),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const TextSpan(
-                  text:
-                      '\n\nيرجى التحقق من بريدك الوارد والضغط على رابط التأكيد لإتمام التسجيل.',
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E8B57),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pop();
-
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const TrustedDevicesPage(),
-                    ),
-                  );
-                },
-                child: const Text(
-                  'حسناً',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -149,11 +86,14 @@ class _RegistrationFlowState extends State<RegistrationFlow> {
           controller: _pageController,
           physics: const NeverScrollableScrollPhysics(),
           children: [
+            /// 🔹 شاشة الهوية
             IdScreen(
               formKey: _idFormKey,
               idController: _idController,
               onNext: _nextPage,
             ),
+
+            /// 🔹 شاشة البيانات (username/password)
             DetailsScreen(
               formKey: _detailsFormKey,
               usernameController: _usernameController,
@@ -162,11 +102,13 @@ class _RegistrationFlowState extends State<RegistrationFlow> {
               onNext: _nextPage,
               onBack: _prevPage,
             ),
+
+            /// 🔹 شاشة الجوال والبريد (تم تعديلها)
             ContactScreen(
               formKey: _contactFormKey,
               phoneController: _phoneController,
               emailController: _emailController,
-              onSubmit: _showConfirmationDialog,
+              sessionId: "", // ✅ مهم (حل الخطأ)
               onBack: _prevPage,
             ),
           ],

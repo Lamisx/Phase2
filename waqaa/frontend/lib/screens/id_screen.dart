@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../widgets/shared_widgets.dart';
+import '../services/api_service.dart'; // ✅ مهم
 import 'nafath_screen.dart';
 
 // ══════════════════════════════════════════════
@@ -9,13 +10,11 @@ import 'nafath_screen.dart';
 class IdScreen extends StatefulWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController idController;
-  final VoidCallback onNext;
 
   const IdScreen({
     super.key,
     required this.formKey,
     required this.idController,
-    required this.onNext,
   });
 
   @override
@@ -42,6 +41,7 @@ class _IdScreenState extends State<IdScreen> {
                     const SizedBox(height: 10),
                     buildBackButton(() => Navigator.pop(context)),
                     const SizedBox(height: 60),
+
                     const Center(
                       child: Text(
                         'تسجيل حساب جديد',
@@ -53,9 +53,12 @@ class _IdScreenState extends State<IdScreen> {
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 50),
+
                     fieldLabel('رقم الهوية'),
                     const SizedBox(height: 10),
+
                     TextFormField(
                       controller: widget.idController,
                       keyboardType: TextInputType.number,
@@ -70,17 +73,49 @@ class _IdScreenState extends State<IdScreen> {
                         return null;
                       },
                     ),
+
                     const SizedBox(height: 120),
-                    buildButton('تسجيل', () {
+
+                    // 🔴 زر تسجيل بعد الربط
+                    buildButton('تسجيل', () async {
                       if (widget.formKey.currentState!.validate()) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => NafathScreen(),
-                          ),
-                        );
+                        final nationalId = widget.idController.text;
+
+                        try {
+                          // ⏳ عرض loading
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (_) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+
+                          // 🔹 إرسال الهوية للباك اند
+                          String sessionId = await ApiService.startRegistration(
+                            nationalId,
+                          );
+
+                          // ❌ إغلاق loading
+                          Navigator.pop(context);
+
+                          // ✅ الانتقال لصفحة نفاذ
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => NafathScreen(
+                                sessionId: sessionId,
+                                nationalId: nationalId,
+                              ),
+                            ),
+                          );
+                        } catch (e) {
+                          Navigator.pop(context);
+                          print("ERROR: $e");
+                        }
                       }
                     }),
+
                     const SizedBox(height: 16),
                     buildFooter(),
                     const SizedBox(height: 20),
