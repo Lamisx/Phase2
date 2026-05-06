@@ -1,18 +1,25 @@
 from django.urls import path
-from . import views
+from rest_framework_simplejwt.views import TokenRefreshView
+
+from .views import (
+    CompleteRegistrationView,
+    DelegationListCreateView,
+    DelegationRevokeView,
+    LoginThrottledTokenObtainPairView,
+    MeView,
+    StartRegistrationView,
+    health_check,
+)
+
+app_name = "account"
 
 urlpatterns = [
-    path("health/", views.health_check),
-    path("register/", views.register),
-    path("login/", views.login),
-    path("idRegister/", views.start_registration),
-    path("chekNafath/", views.mock_nafath),
-    path("userPas/", views.set_credentials),
-    path("phEm/", views.set_contact),
-    path("SignIn/", views.complete_registration),
-    
-
-    path("delegates/", views.list_delegates),
-    path("delegates/create/", views.create_delegate),
-    path("delegates/<uuid:delegate_id>/delete/", views.delete_delegate),
+    path("health/", health_check, name="health-check"),
+    path("auth/register/start/",StartRegistrationView.as_view(), name="register-start",),
+    path("auth/register/complete/",CompleteRegistrationView.as_view(),name="register-complete",),
+    path("auth/login/",LoginThrottledTokenObtainPairView.as_view(), name="token-obtain",),
+    path("auth/token/refresh/",TokenRefreshView.as_view(),name="token-refresh",),
+    path("me/", MeView.as_view(), name="me"),
+    path("delegations/", DelegationListCreateView.as_view(), name="delegation-list-create",),
+    path("delegations/<uuid:delegation_id>/revoke/",DelegationRevokeView.as_view(), name="delegation-revoke",),
 ]
