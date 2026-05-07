@@ -2,7 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth.hashers import make_password, check_password
 from core.utils import hash_national_id
 from django.core.validators import RegexValidator
-from .models import AccountUser, UserDelegation ,WaqaUser
+from .models import AccountUser, UserDelegation ,RegistrationSession
+
 import re
 
 # إذا النظام سعودي فقط
@@ -56,7 +57,6 @@ class RegistrationSessionSerializer(serializers.ModelSerializer):
     is_final = serializers.BooleanField(read_only=True)
 
     class Meta:
-        from .models import RegistrationSession
         model = RegistrationSession
         fields = [
             "id", "status", "expires_at", "created_at",
@@ -72,8 +72,8 @@ class LoginSerializer(serializers.Serializer):
         username = data.get("username").strip().lower()
         password = data.get("password")
         try:
-            user = WaqaUser.objects.get(username=username)
-        except WaqaUser.DoesNotExist:
+            user = AccountUser.objects.get(username=username)
+        except AccountUser.DoesNotExist:
             raise serializers.ValidationError("Invalid username or password.")
 
         if not user.password_hash:
@@ -101,9 +101,6 @@ class AccountSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class LoginSerializer(serializers.Serializer):
-    username = serializers.CharField(required=True)
-    password = serializers.CharField(required=True, write_only=True)
 
 
 # ============================================================
