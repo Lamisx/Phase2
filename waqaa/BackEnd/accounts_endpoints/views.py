@@ -1,11 +1,11 @@
 from django.utils import timezone
-import time
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from django.contrib.auth.hashers import make_password
 from .models import UserDelegation, RegistrationSession, AccountUser
 from .serializers import StartRegistrationSerializer, AccountSerializer, LoginSerializer, CreateDelegationSerializer, DelegationSerializer
+from core.utils import hash_national_id
+
 
 @api_view(["GET"])
 def health_check(request):
@@ -25,76 +25,27 @@ def start_registration(request):
         )
 
     session = RegistrationSession.objects.create(
-        national_id=national_id
-    )
+    national_id_hmac=hash_national_id(national_id)
+)
 
     return Response({
         "session_id": str(session.id)
     })
 
 @api_view(["POST"])
-def mock_nafath(request):
-    session_id = request.data.get("session_id")
-    national_id = request.data.get("national_id")
-
-    if not session_id:
-        return Response({"error": "session_id required"}, status=400)
-
-    session = RegistrationSession.objects.get(id=session_id)
-
-    time.sleep(3)
-
-    if national_id.startswith("1"):
-        session.is_verified = True
-        session.status = "nafath_verified"
-        session.save()
-
-        return Response({
-            "verified": True,
-            "message": "Nafath verification successful"
-        })
-    else:
-        return Response({
-            "verified": False,
-            "message": "Nafath verification failed"
-        }, status=400)
-    
-@api_view(["POST"])
-def set_credentials(request):
-    session = RegistrationSession.objects.get(id=request.data.get("session_id"))
-
-    if not session.is_verified:
-        return Response({"error": "Not verified"}, status=400)
-
-    session.username = request.data.get("username")
-    session.password = make_password(request.data.get("password"))  
-    session.save()
-
-    return Response({"message": "Saved"})
-
-@api_view(["POST"])
-def set_contact(request):
-    session = RegistrationSession.objects.get(id=request.data.get("session_id"))
-
-    session.phone = request.data.get("phone")
-    session.email = request.data.get("email")
-    session.save()
-
-    return Response({"message": "Saved"})
-
-@api_view(["POST"])
 def complete_registration(request):
     session = RegistrationSession.objects.get(id=request.data.get("session_id"))
 
-    user = AccountUser.objects.create(
-        national_id=session.national_id,
+    user = AccountUser.objects.create_user(
+        national_id_hmac=session.national_id_hmac,
         username=session.username,
-        password=session.password,
+        display_name=session.display_name,
+        password=session.password_hash,
         phone=session.phone,
         email=session.email,
     )
 
-    session.status = "completed"
+    session.status = RegistrationSession.STATUS_COMPLETED
     session.save()
 
     return Response({
@@ -142,7 +93,7 @@ def create_delegate(request):
     return Response(
         {
             "message": "Delegate added successfully",
-            "delegate": DelegateSerializer(delegation).data
+            "delegate": DelegationSerializer(delegation).data
         },
         status=status.HTTP_201_CREATED
     )#
@@ -158,10 +109,11 @@ def list_delegates(request):
         )
 
     delegations = UserDelegation.objects.filter(
-        primary_user_id=primary_user_id
+        owner_account_id=primary_user_id
+
     ).order_by("-created_at")
 
-    serializer = DelegateSerializer(delegations, many=True)
+    serializer = DelegationSerializer(delegations, many=True)
     return Response(
         {
             "count": len(serializer.data),
