@@ -3,16 +3,10 @@ import time
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .models import DelegatedAccess , RegistrationSession , WaqaUser
 from django.contrib.auth.hashers import make_password
+from .models import UserDelegation, RegistrationSession, AccountUser
+from .serializers import StartRegistrationSerializer, AccountSerializer, LoginSerializer, CreateDelegationSerializer, DelegationSerializer
 
-from .serializers import (
-    RegisterSerializer,
-    UserSerializer,
-    LoginSerializer,
-    AddDelegateSerializer,
-    DelegateSerializer,
-)
 @api_view(["GET"])
 def health_check(request):
     return Response({"status": "server is running"})
@@ -92,7 +86,7 @@ def set_contact(request):
 def complete_registration(request):
     session = RegistrationSession.objects.get(id=request.data.get("session_id"))
 
-    user = WaqaUser.objects.create(
+    user = AccountUser.objects.create(
         national_id=session.national_id,
         username=session.username,
         password=session.password,
@@ -110,7 +104,7 @@ def complete_registration(request):
 # register endpoint
 @api_view(["POST"])
 def register(request):
-    serializer = RegisterSerializer(data=request.data)
+    serializer = StartRegistrationSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
     user = serializer.save()
@@ -118,7 +112,7 @@ def register(request):
     return Response(
         {
             "message": "User registered successfully.",
-            "user": UserSerializer(user).data
+            "user": AccountSerializer(user).data
         },
         status=status.HTTP_201_CREATED
     )
@@ -133,14 +127,14 @@ def login(request):
     return Response(
         {
             "message": "Login successful.",
-            "user": UserSerializer(user).data
+            "user": AccountSerializer(user).data
         },
         status=status.HTTP_200_OK
     ) 
 
 @api_view(["POST"])
 def create_delegate(request):
-    serializer = AddDelegateSerializer(data=request.data)
+    serializer = CreateDelegationSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
     delegation = serializer.save()
@@ -163,7 +157,7 @@ def list_delegates(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    delegations = DelegatedAccess.objects.filter(
+    delegations = UserDelegation.objects.filter(
         primary_user_id=primary_user_id
     ).order_by("-created_at")
 
@@ -179,8 +173,8 @@ def list_delegates(request):
 @api_view(["DELETE"])
 def delete_delegate(request, delegate_id):
     try:
-        delegation = DelegatedAccess.objects.get(id=delegate_id)
-    except DelegatedAccess.DoesNotExist:
+        delegation = UserDelegation.objects.get(id=delegate_id)
+    except UserDelegation.DoesNotExist:
         return Response(
             {"error": "Delegation not found"},
             status=status.HTTP_404_NOT_FOUND
