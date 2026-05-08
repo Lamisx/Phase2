@@ -175,9 +175,23 @@ def set_credentials(request):
         session_id=request.data.get("session_id"),
         username=request.data.get("username"),
         password=request.data.get("password"),
+        
     )
 
     return Response({
         "message": "Credentials saved"
+    })
+
+@api_view(["POST"])
+def set_contact(request):
+
+    RegistrationService.set_contact(
+        session_id=request.data.get("session_id"),
+        phone=request.data.get("phone"),
+        email=request.data.get("email"),
+    )
+
+    return Response({
+        "message": "Saved"
     })
 
