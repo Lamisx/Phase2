@@ -1,7 +1,8 @@
 import uuid
 from django.db import models
 from django.core.exceptions import ValidationError
-from datetime import timedelta,timezone
+from datetime import timedelta
+from django.utils import timezone
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from .managers import AccountUserManager
 
@@ -10,7 +11,7 @@ from .managers import AccountUserManager
 # Registration Session
 # ============================================================
 
-
+#GOOD architecture ✅
 class RegistrationSession(models.Model):
     """AccountUser."""
 
@@ -32,13 +33,13 @@ class RegistrationSession(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    national_id_hmac = models.CharField(min_length=10,max_length=10, db_index=True)
+    national_id_hmac = models.CharField(max_length=64, db_index=True)
 
     username = models.CharField(max_length=20, null=True, blank=True)
     password_hash = models.CharField( min_length=8, null=True, blank=True)
     display_name = models.CharField(max_length=20, null=True, blank=True)
     phone = models.CharField(max_length=10, null=True, blank=True)
-    email = models.CharField(max_length=30, null=True, blank=True)
+    email = models.EmailField()#change
 
     status = models.CharField(
         max_length=32, choices=STATUS_CHOICES, default=STATUS_PENDING,
@@ -88,7 +89,7 @@ class RegistrationSession(models.Model):
 
 
 # ============================================================
-# Account User
+# Account User✅
 # ============================================================
 class AccountUser(AbstractBaseUser, PermissionsMixin):
 
@@ -105,7 +106,7 @@ class AccountUser(AbstractBaseUser, PermissionsMixin):
 
     username = models.CharField(max_length=150, unique=True)
     display_name = models.CharField(max_length=200)
-    email = models.CharField(max_length=254, null=True, blank=True, unique=True)
+    email = models.EmailField()#change
     phone = models.CharField(max_length=20, null=True, blank=True, unique=True)
     national_id_hmac = models.CharField(
         max_length=128, null=True, blank=True, unique=True,
@@ -139,7 +140,7 @@ class AccountUser(AbstractBaseUser, PermissionsMixin):
 
 
 # ============================================================
-# User Delegation
+# User Delegation ✅
 # ============================================================
 class UserDelegation(models.Model):
 

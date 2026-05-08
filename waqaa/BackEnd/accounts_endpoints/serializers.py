@@ -1,10 +1,10 @@
 from rest_framework import serializers
-from django.contrib.auth.hashers import make_password, check_password
-from core.utils import hash_national_id
 from django.core.validators import RegexValidator
 from .models import AccountUser, UserDelegation ,RegistrationSession
 
-import re
+
+
+#serializers layer is GOOD now 
 
 # إذا النظام سعودي فقط
 phone_regex = RegexValidator(
@@ -29,6 +29,7 @@ class StartRegistrationSerializer(serializers.Serializer):
         national_id_regex(value)
         return value
     
+  # good 
 class CompleteRegistrationSerializer(serializers.Serializer):
     session_id = serializers.UUIDField(required=True)
     username = serializers.CharField(required=True, max_length=20)
@@ -51,7 +52,7 @@ class CompleteRegistrationSerializer(serializers.Serializer):
         phone_regex(value)
         return value
     
-
+#RegistrationSessionSerializer ✅
 class RegistrationSessionSerializer(serializers.ModelSerializer):
     is_expired = serializers.BooleanField(read_only=True)
     is_final = serializers.BooleanField(read_only=True)
@@ -63,7 +64,7 @@ class RegistrationSessionSerializer(serializers.ModelSerializer):
             "is_expired", "is_final",
         ]
         read_only_fields = fields
-
+#✅
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
@@ -76,19 +77,16 @@ class LoginSerializer(serializers.Serializer):
         except AccountUser.DoesNotExist:
             raise serializers.ValidationError("Invalid username or password.")
 
-        if not user.password_hash:
+        if not user.check_password(password):
             raise serializers.ValidationError("Invalid username or password.")
-
-        if not check_password(password, user.password_hash):
-            raise serializers.ValidationError("Invalid username or password.")
-
+        
         data["user"] = user
         return data
 
 
 
 # ============================================================
-# Account
+# Account ✅
 # ============================================================
 class AccountSerializer(serializers.ModelSerializer):
 
@@ -104,7 +102,7 @@ class AccountSerializer(serializers.ModelSerializer):
 
 
 # ============================================================
-# Delegation
+# Delegation ✅
 # ============================================================
 class DelegationSerializer(serializers.ModelSerializer):
     owner_username = serializers.CharField(
@@ -135,7 +133,7 @@ class DelegationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-
+#good
 class CreateDelegationSerializer(serializers.Serializer):
    
     delegated_account_id = serializers.UUIDField(required=True)
