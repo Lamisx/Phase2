@@ -186,7 +186,7 @@ def set_credentials(request):
 def set_contact(request):
 
     RegistrationService.set_contact(
-        session_id=request.data.get("session_id"),
+        session_id=request.data.get("session_id"),#
         phone=request.data.get("phone"),
         email=request.data.get("email"),
     )
