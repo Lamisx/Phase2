@@ -1,16 +1,25 @@
+"""
+Django settings for the Trust Verification project.
+
+Reads configuration from environment variables (with safe development defaults).
+"""
 import os
+import warnings
+from datetime import timedelta
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.AC
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-load_dotenv(BASE_DIR / ".env")
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 # ============================================================
-# Helper for required env vars
+# Paths & .env
+# ============================================================
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
+
+
+# ============================================================
+# Environment helpers
 # ============================================================
 def env(key: str, default=None, required: bool = False):
     """Read an env var; raise if required and missing."""
@@ -21,125 +30,155 @@ def env(key: str, default=None, required: bool = False):
             f"Add it to your .env file."
         )
     return value
+
+
 def env_bool(key: str, default: bool = False) -> bool:
     return os.getenv(key, str(default)).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def env_int(key: str, default: int) -> int:
     try:
         return int(os.getenv(key, str(default)))
     except (TypeError, ValueError):
         return default
+
+
 def env_list(key: str, default: str = "") -> list:
     raw = os.getenv(key, default)
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 # ============================================================
-# Core Django
+# Core
 # ============================================================
-DEBUG = env_bool("DJANGO_DEBUG", False)
-# In production, SECRET_KEY MUST be set via env. In dev we tolerate a fallback.
+DEBUG = env_bool("DJANGO_DEBUG", default=False)
+
 SECRET_KEY = env(
     "DJANGO_SECRET_KEY",
-    default=("unsafe-dev-key-do-not-use-in-prod" if DEBUG else None),
+    default="unsafe-dev-key-do-not-use-in-prod" if DEBUG else None,
     required=not DEBUG,
 )
 
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", default="127.0.0.1,localhost")
 
-# Application definition
+ROOT_URLCONF = "core.urls"
+WSGI_APPLICATION = "core.wsgi.application"
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# AUTH_USER_MODEL uses the app *label* (not folder name).
+# accounts_endpoints/apps.py sets label="account", which is why this works.
+AUTH_USER_MODEL = "account.AccountUser"
+
+
+# ============================================================
+# Apps
+# ============================================================
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'django.contrib.postgres',
-    'rest_framework',
-    'accounts_endpoints',
-    'devices_endpoints',
-    'organization_endpoints',
-    'verification_endpoint',
-    'devices',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.postgres",
+
+    "rest_framework",
+    "rest_framework_simplejwt",
+
+    # Local apps — actual folder names on disk.
+    "accounts_endpoints",       # internal label = "account" (set in apps.py)
+    "organization_endpoints",
+    "devices_endpoints",
+    "verification_endpoint",
 ]
 
+
+# ============================================================
+# Middleware
+# ============================================================
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'organization_endpoints.middleware.api_key_middleware.APIKeyMiddleware',
-
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = 'core.urls'
 
+# ============================================================
+# Templates
+# ============================================================
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'core.wsgi.application'
 
-
+# ============================================================
 # Database
+# ============================================================
 DATABASES = {
-
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME":     env("DB_NAME", required=True),
-        "USER":     env("DB_USER", required=True),
-        "PASSWORD": env("DB_PASSWORD", required=True),
-        "HOST":     env("DB_HOST", required=True),
-        "PORT":     env("DB_PORT", default="5432"),
-        "CONN_MAX_AGE": env_int("DB_CONN_MAX_AGE", 60),
-
+        "NAME": env("DB_NAME", default="postgres", required=not DEBUG),
+        "USER": env("DB_USER", default="postgres", required=not DEBUG),
+        "PASSWORD": env("DB_PASSWORD", default="", required=not DEBUG),
+        "HOST": env("DB_HOST", default="127.0.0.1"),
+        "PORT": env("DB_PORT", default="5432"),
+        "CONN_MAX_AGE": env_int("DB_CONN_MAX_AGE", default=60),
+        "CONN_HEALTH_CHECKS": True,
     }
 }
 
-# Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
 
+# ============================================================
+# Password validation
+# ============================================================
 AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',},
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8},
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 
+# ============================================================
 # Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
-
-LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'UTC'
-
+# ============================================================
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
 USE_I18N = True
-
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
-# Default primary key field type
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# ============================================================
+# Static files
+# ============================================================
+STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Cache (required for throttling)
+
+# ============================================================
+# Cache
+# ============================================================
 REDIS_URL = env("REDIS_URL", default=None)
+
 if REDIS_URL:
     CACHES = {
         "default": {
@@ -148,52 +187,108 @@ if REDIS_URL:
         }
     }
 else:
-    # Local memory cache — fine for dev, NOT suitable for multi-process production
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "waqa-default-cache",
+            "LOCATION": "default-cache",
         }
     }
 
-# Django REST Framework
 
+# ============================================================
+# Django REST Framework
+# ============================================================
 REST_FRAMEWORK = {
-    "DEFAULT_RENDERER_CLASSES": [
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+    "DEFAULT_RENDERER_CLASSES": (
         "rest_framework.renderers.JSONRenderer",
-    ],
-    "DEFAULT_PARSER_CLASSES": [
+    ),
+    "DEFAULT_PARSER_CLASSES": (
         "rest_framework.parsers.JSONParser",
-    ],
-    "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.ScopedRateThrottle",
-    ],
+    ),
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ),
     "DEFAULT_THROTTLE_RATES": {
-        # Per-organization throttles (used by OrgScopedThrottle)
-        "verify_create": "60/min",     # session creation
-        "verify_read":   "300/min",    # status / token verification / lists
-        # Per-IP throttle for the public signature endpoint
-        "verify_signature": "30/min",
+        "anon": "60/min",
+        "user": "300/min",
+        "auth_login": "10/min",
+        "auth_register": "10/min",
     },
 }
-# Waqa — Verification Settings 
-API_KEY_PEPPER = env("WAQA_API_KEY_PEPPER", required=not DEBUG)
 
-# Verification session lifetime (minutes)
-VERIFICATION_SESSION_TTL_MINUTES = env_int("WAQA_SESSION_TTL_MINUTES", 5)
 
-# Challenge lifetime (seconds) — should be short
-VERIFICATION_CHALLENGE_TTL_SECONDS = env_int("WAQA_CHALLENGE_TTL_SECONDS", 120)
+# ============================================================
+# Simple JWT
+# ============================================================
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env_int("JWT_ACCESS_MINUTES", default=30)),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=env_int("JWT_REFRESH_DAYS", default=7)),
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
 
-# Production security hardening (only when DEBUG=False)
+
+# ============================================================
+# Cryptography
+# ============================================================
+API_KEY_PEPPER = env(
+    "API_KEY_PEPPER",
+    default="dev-api-key-pepper" if DEBUG else None,
+    required=not DEBUG,
+)
+
+NATIONAL_ID_PEPPER = env(
+    "NATIONAL_ID_PEPPER",
+    default="dev-national-id-pepper" if DEBUG else None,
+    required=not DEBUG,
+)
+
+PAYLOAD_ENCRYPTION_KEY = env(
+    "PAYLOAD_ENCRYPTION_KEY",
+    default=None,
+    required=not DEBUG,
+)
+
+if DEBUG and not PAYLOAD_ENCRYPTION_KEY:
+    from cryptography.fernet import Fernet
+    PAYLOAD_ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
+    warnings.warn(
+        "PAYLOAD_ENCRYPTION_KEY not set — generated ephemeral key for development. "
+        "Encrypted data will be unreadable after server restart.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+
+
+# ============================================================
+# Reverse proxy
+# ============================================================
+TRUST_FORWARDED_HEADERS = env_bool("TRUST_FORWARDED_HEADERS", default=False)
+
+
+# ============================================================
+# Production hardening
+# ============================================================
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30  # 30 days
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
-    SECURE_REFERRER_POLICY = "same-origin"
+    SECURE_REFERRER_POLICY = "no-referrer"
     X_FRAME_OPTIONS = "DENY"
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+    if TRUST_FORWARDED_HEADERS:
+        SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

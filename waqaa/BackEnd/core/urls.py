@@ -1,36 +1,19 @@
-"""
-URL configuration for core project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/4.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
+"""Root URL configuration."""
 from django.contrib import admin
-from django.urls import path, include
-
 from django.http import JsonResponse
+from django.urls import include, path
 
-def home(request):
-    return JsonResponse({"message": "API is running 🚀"})
+
+def health_check(_request):
+    """Liveness probe — used by load balancers and uptime monitors."""
+    return JsonResponse({"status": "ok"})
+
 
 urlpatterns = [
-
-    path("", home),
-
+    path("healthz/", health_check, name="health-check"),
     path("admin/", admin.site.urls),
-
-    path("api/accounts/", include("accounts_endpoints.urls")),
-    path("api/devices/", include("devices_endpoints.urls")),
-    path("api/organizations/", include("organization_endpoints.urls")),
+    path("api/account/",      include("accounts_endpoints.urls")),
+    path("api/organization/", include("organization_endpoints.urls")),
+    path("api/device/",       include("devices_endpoints.urls")),
     path("api/verification/", include("verification_endpoint.urls")),
-
 ]
