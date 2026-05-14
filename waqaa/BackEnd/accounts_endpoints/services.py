@@ -9,8 +9,8 @@ from rest_framework.exceptions import (
     ValidationError,
 )
 from core.utils_crypto import hash_national_id
-from .models import *
 from rest_framework.exceptions import ValidationError
+from .models import AccountUser, RegistrationSession
 
 
 
@@ -22,10 +22,6 @@ from rest_framework.exceptions import ValidationError
 5. complete_registration # type: ignore
 6.create final AccountUer # type: ignore
 # ============================================================
-
-
-
-
 
 class RegistrationService:
   
@@ -78,9 +74,7 @@ class RegistrationService:
 
     @staticmethod
     @transaction.atomic
-    def complete_registration(*, session_id, username, display_name, password,
-                                phone, email=None):
-        from .models import AccountUser, RegistrationSession
+    def complete_registration(*, session_id, username, display_name, password, phone, email=None):
 
         try:
             session = RegistrationSession.objects.select_for_update().get(id=session_id)
@@ -127,8 +121,51 @@ class RegistrationService:
         ])
         return session, account
     
-  
+    @staticmethod
+    def set_credentials(*, session_id, username, password):
 
+
+        try:
+            session = RegistrationSession.objects.get(id=session_id)
+
+        except RegistrationSession.DoesNotExist:
+            raise ValidationError("Invalid registration session")
+
+
+        if session.status != RegistrationSession.STATUS_IDENTITY_VERIFIED:
+            raise ValueError("Session not verified")
+
+        session.username = username.strip().lower()
+
+        session.password_hash = make_password(password)
+
+        session.save(update_fields=[
+            "username",
+            "password_hash",
+        ])
+
+        return session
+
+    @staticmethod
+    def set_contact(*, session_id, phone, email):
+
+        try:
+            session = RegistrationSession.objects.get(id=session_id)
+
+        except RegistrationSession.DoesNotExist:
+            raise ValidationError("Invalid registration session")
+
+
+        session.phone = phone
+        session.email = email
+
+        session.save(update_fields=[
+            "phone",
+            "email",
+        ])
+
+        return session
+    
 
 class AccountService:
 
@@ -257,52 +294,3 @@ class DelegationService:
         )
 
 
-
-class RegistrationService:
-
-    @staticmethod
-    def set_credentials(*, session_id, username, password):
-
-        session = RegistrationSession.objects.get(id=session_id)
-
-        try:
-            session = RegistrationSession.objects.get(id=session_id)
-
-        except RegistrationSession.DoesNotExist:
-            raise ValidationError("Invalid registration session")
-
-
-        if session.status != RegistrationSession.STATUS_IDENTITY_VERIFIED:
-            raise ValueError("Session not verified")
-
-        session.username = username.strip().lower()
-
-        session.password_hash = make_password(password)
-
-        session.save(update_fields=[
-            "username",
-            "password_hash",
-        ])
-
-        return session
-
-    @staticmethod
-    def set_contact(*, session_id, phone, email):
-
-        session = RegistrationSession.objects.get(id=session_id)
-        try:
-            session = RegistrationSession.objects.get(id=session_id)
-
-        except RegistrationSession.DoesNotExist:
-            raise ValidationError("Invalid registration session")
-
-
-        session.phone = phone
-        session.email = email
-
-        session.save(update_fields=[
-            "phone",
-            "email",
-        ])
-
-        return session

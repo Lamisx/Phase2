@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import WaqaUser, DelegatedAccess
+from .models import AccountUser, UserDelegation
 
-admin.site.register(WaqaUser)
-admin.site.register(DelegatedAccess)
+admin.site.register(AccountUser)
+admin.site.register(UserDelegation)

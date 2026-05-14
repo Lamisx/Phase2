@@ -35,9 +35,9 @@ class RegistrationSession(models.Model):
 
     national_id_hmac = models.CharField(max_length=64, db_index=True)
 
-    username = models.CharField(max_length=20, null=True, blank=True)
-    password_hash = models.CharField(max_length=128, min_length=8, null=True, blank=True)
-    display_name = models.CharField(max_length=20, null=True, blank=True)
+   # username = models.CharField(max_length=20, null=True, blank=True)
+    password_hash = models.CharField(max_length=128,  null=True, blank=True)
+    #display_name = models.CharField(max_length=20, null=True, blank=True)
     phone = models.CharField(max_length=10, null=True, blank=True)
     email = models.EmailField()#change
 
