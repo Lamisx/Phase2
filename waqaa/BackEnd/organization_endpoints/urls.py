@@ -1,11 +1,19 @@
+"""Organization URL routes."""
 from django.urls import path
-from . import views
-
-from django.urls import path, include
-
+ 
+from .views import (
+    LinkUserView,
+    OrganizationApiKeyListView,
+    OrganizationSelfView,
+    OrganizationUserListView,
+)
+ 
+ 
+app_name = "organization"
+ 
 urlpatterns = [
-     path("link-user/", views.link_user),
-#    path("link-user/", views.link_user, name="link_user"),
-
+    path("me/",          OrganizationSelfView.as_view(),     name="me"),
+    path("api-keys/",    OrganizationApiKeyListView.as_view(), name="api-key-list"),
+    path("links/",       LinkUserView.as_view(),             name="link-create"),
+    path("links/list/",  OrganizationUserListView.as_view(), name="link-list"),
 ]
-
