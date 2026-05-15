@@ -35,9 +35,9 @@ class RegistrationSession(models.Model):
 
     national_id_hmac = models.CharField(max_length=64, db_index=True)
 
-   # username = models.CharField(max_length=20, null=True, blank=True)
+    username = models.CharField(max_length=20, null=True, blank=True)
     password_hash = models.CharField(max_length=128,  null=True, blank=True)
-    #display_name = models.CharField(max_length=20, null=True, blank=True)
+    display_name = models.CharField(max_length=20, null=True, blank=True)
     phone = models.CharField(max_length=10, null=True, blank=True)
     email = models.EmailField()#change
 
@@ -46,7 +46,7 @@ class RegistrationSession(models.Model):
     )
 
     account = models.ForeignKey(
-        "account_endpoints.AccountUser",
+        "accounts_endpoints.AccountUser",
         null=True, blank=True,
         on_delete=models.SET_NULL,
         related_name="registration_sessions",
@@ -160,12 +160,12 @@ class UserDelegation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     owner_account = models.ForeignKey(
-        AccountUser,
+        "accounts_endpoints.AccountUser",
         on_delete=models.CASCADE,
         related_name="delegations_granted",
     )
     delegated_account = models.ForeignKey(
-        AccountUser,
+        "accounts_endpoints.AccountUser",
         on_delete=models.CASCADE,
         related_name="delegations_received",
     )

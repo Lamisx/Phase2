@@ -65,9 +65,8 @@ ROOT_URLCONF = "core.urls"
 WSGI_APPLICATION = "core.wsgi.application"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# AUTH_USER_MODEL uses the app *label* (not folder name).
-# accounts_endpoints/apps.py sets label="account", which is why this works.
-AUTH_USER_MODEL = "account.AccountUser"
+
+AUTH_USER_MODEL = "accounts_endpoints.AccountUser"
 
 
 # ============================================================
@@ -86,7 +85,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
 
     # Local apps — actual folder names on disk.
-    "accounts_endpoints",       # internal label = "account" (set in apps.py)
+    "accounts_endpoints",       
     "organization_endpoints",
     "devices_endpoints",
     "verification_endpoint",

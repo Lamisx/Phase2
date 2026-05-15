@@ -1,27 +1,23 @@
-from django.contrib.auth.hashers import make_password
 from datetime import timedelta
+from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import (
     NotFound,
     PermissionDenied,
     ValidationError,
 )
+ 
 from core.utils_crypto import hash_national_id
-from rest_framework.exceptions import ValidationError
-from .models import AccountUser, RegistrationSession
-
-
-
-"""# ============================================================
-1. start_registration      # type: ignore
-2. verify identity       # type: ignore
-3. set_credentials        # type: ignore
-4. set_contact           # type: ignore
-5. complete_registration # type: ignore
-6.create final AccountUer # type: ignore
-# ============================================================"""
+ 
+from .models import AccountUser, RegistrationSession, UserDelegation
+ 
+ 
+# ============================================================
+# RegistrationService
+# ============================================================
 
 class RegistrationService:
   
@@ -29,16 +25,14 @@ class RegistrationService:
     @staticmethod
     @transaction.atomic
     def start_registration(*, national_id: str):
-        from core.utils_crypto import hash_national_id
-        from .models import AccountUser, RegistrationSession
 
         national_id_hmac = hash_national_id(national_id)
 
-        # رقم هوية موجود مسبقاً كحساب مكتمل → ارفض
+        # National ID already linked to a completed account → reject.
         if AccountUser.objects.filter(national_id_hmac=national_id_hmac).exists():
             raise ValidationError({"national_id": "Already registered."})
 
-        # أبطل أي جلسة نشطة قديمة لنفس الرقم
+        # Expire any older active sessions for this national_id.
         RegistrationSession.objects.filter(
             national_id_hmac=national_id_hmac,
             status__in=RegistrationSession.ACTIVE_STATUSES,
@@ -53,7 +47,6 @@ class RegistrationService:
     @staticmethod
     @transaction.atomic
     def mark_identity_verified(*, session_id):
-        from .models import RegistrationSession
 
         try:
             session = RegistrationSession.objects.select_for_update().get(id=session_id)
@@ -70,6 +63,48 @@ class RegistrationService:
 
         session.status = RegistrationSession.STATUS_IDENTITY_VERIFIED
         session.save(update_fields=["status", "updated_at"])
+        return session
+    
+    @staticmethod
+    @transaction.atomic
+    def set_credentials(*, session_id, username, password) -> RegistrationSession:
+        try:
+            session = RegistrationSession.objects.select_for_update().get(id=session_id)
+        except RegistrationSession.DoesNotExist:
+            raise NotFound("Registration session not found.")
+ 
+        if session.is_expired:
+            session.status = RegistrationSession.STATUS_EXPIRED
+            session.save(update_fields=["status", "updated_at"])
+            raise ValidationError({"detail": "Session expired."})
+ 
+        if session.status != RegistrationSession.STATUS_IDENTITY_VERIFIED:
+            raise ValidationError({"detail": "Identity not verified yet."})
+ 
+        session.username = username.strip().lower()
+        session.password_hash = make_password(password)
+        session.save(update_fields=["username", "password_hash", "updated_at"])
+        return session
+    
+
+    @staticmethod
+    @transaction.atomic
+    def set_contact(*, session_id, phone, email):
+
+        try:
+            session = RegistrationSession.objects.select_for_update().get(id=session_id)
+
+        except RegistrationSession.DoesNotExist:
+            raise NotFound("Registration session not found.")
+
+        if session.is_expired:
+            session.status = RegistrationSession.STATUS_EXPIRED
+            session.save(update_fields=["status", "updated_at"])
+            raise ValidationError({"detail": "Session expired."})
+
+        session.phone = phone
+        session.email = email or None
+        session.save(update_fields=["phone", "email", "updated_at"])
         return session
 
     @staticmethod
@@ -89,7 +124,7 @@ class RegistrationService:
         if session.status != RegistrationSession.STATUS_IDENTITY_VERIFIED:
             raise ValidationError({"detail": "Identity not verified yet."})
 
-        # تحقق من تكرار الحقول قبل الإنشاء
+        # Duplicate checks before creation (clearer errors than IntegrityError).
         if AccountUser.objects.filter(username=username).exists():
             raise ValidationError({"username": "Already taken."})
         if AccountUser.objects.filter(phone=phone).exists():
@@ -97,7 +132,7 @@ class RegistrationService:
         if email and AccountUser.objects.filter(email=email).exists():
             raise ValidationError({"email": "Already registered."})
 
-        # أنشئ الحساب — كلمة المرور تُجزَّأ هنا فقط
+        # create_user calls set_password() → password is hashed here, once.
         account = AccountUser.objects.create_user(
             username=username,
             password=password,
@@ -106,76 +141,31 @@ class RegistrationService:
             email=email or None,
             national_id_hmac=session.national_id_hmac,
         )
-
-        # أكمل الجلسة واربطها بالحساب
+        
+        # Complete the session, link it to the account, and clear the
         session.status = RegistrationSession.STATUS_COMPLETED
         session.account = account
         session.username = username
         session.display_name = display_name
         session.phone = phone
         session.email = email or None
-        # password_hash يبقى None — الحساب الفعلي يحوي الـ hash
         session.save(update_fields=[
             "status", "account", "username", "display_name",
             "phone", "email", "updated_at",
         ])
         return session, account
     
-    @staticmethod
-    def set_credentials(*, session_id, username, password):
-
-
-        try:
-            session = RegistrationSession.objects.get(id=session_id)
-
-        except RegistrationSession.DoesNotExist:
-            raise ValidationError("Invalid registration session")
-
-
-        if session.status != RegistrationSession.STATUS_IDENTITY_VERIFIED:
-            raise ValueError("Session not verified")
-
-        session.username = username.strip().lower()
-
-        session.password_hash = make_password(password)
-
-        session.save(update_fields=[
-            "username",
-            "password_hash",
-        ])
-
-        return session
-
-    @staticmethod
-    def set_contact(*, session_id, phone, email):
-
-        try:
-            session = RegistrationSession.objects.get(id=session_id)
-
-        except RegistrationSession.DoesNotExist:
-            raise ValidationError("Invalid registration session")
-
-
-        session.phone = phone
-        session.email = email
-
-        session.save(update_fields=[
-            "phone",
-            "email",
-        ])
-
-        return session
-    
-
+# ============================================================
+# AccountService
+# ============================================================
 class AccountService:
 
     @staticmethod
     @transaction.atomic
-    def register_account(*, username, display_name, email, phone, national_id, password):
+    def register_account(*, username, display_name, email, phone, national_id, password)-> AccountUser:
         
         national_id_hmac = hash_national_id(national_id)
 
-        # فحوصات تكرار
         if AccountUser.objects.filter(username=username).exists():
             raise ValidationError({"username": "Already taken."})
         if email and AccountUser.objects.filter(email=email).exists():
@@ -200,6 +190,9 @@ class AccountService:
         return account
 
 
+# ============================================================
+# DelegationService
+# ============================================================
 class DelegationService:
 
     DEFAULT_EXPIRY_DAYS = 30
@@ -207,7 +200,7 @@ class DelegationService:
     @staticmethod
     @transaction.atomic
     def create_delegation(*, owner: AccountUser, delegated_account_id,
-                            delegation_method, expires_at=None):
+                            delegation_method, expires_at=None)-> UserDelegation:
 
         if owner.id == delegated_account_id:
             raise ValidationError(
@@ -261,7 +254,7 @@ class DelegationService:
 
     @staticmethod
     @transaction.atomic
-    def revoke_delegation(*, delegation_id, owner: AccountUser):
+    def revoke_delegation(*, delegation_id, owner: AccountUser) -> UserDelegation:
         try:
             delegation = UserDelegation.objects.select_for_update().get(id=delegation_id)
         except UserDelegation.DoesNotExist:
@@ -287,9 +280,7 @@ class DelegationService:
                 delegated_account=delegated,
                 status=UserDelegation.STATUS_ACTIVE,
             )
-            .filter(
-                models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=timezone.now())
-            )
+           .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
             .first()
         )
 
