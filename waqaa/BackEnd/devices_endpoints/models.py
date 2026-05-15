@@ -5,7 +5,7 @@ import uuid
 from django.db import models
 from django.db.models import Q
 
-from accounts_endpoints.models import WaqaUser
+from accounts_endpoints.models import AccountUser
 from organization_endpoints.models import Organization
 
 
@@ -29,7 +29,7 @@ class Device(models.Model):
     )
 
     user = models.ForeignKey(
-        WaqaUser,
+        AccountUser,
         on_delete=models.CASCADE,
         related_name="devices",
     )
