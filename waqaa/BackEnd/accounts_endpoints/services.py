@@ -14,14 +14,14 @@ from .models import AccountUser, RegistrationSession
 
 
 
-# ============================================================
+"""# ============================================================
 1. start_registration      # type: ignore
 2. verify identity       # type: ignore
 3. set_credentials        # type: ignore
 4. set_contact           # type: ignore
 5. complete_registration # type: ignore
 6.create final AccountUer # type: ignore
-# ============================================================
+# ============================================================"""
 
 class RegistrationService:
   
