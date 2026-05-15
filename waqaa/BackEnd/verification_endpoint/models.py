@@ -17,7 +17,7 @@ class VerificationSession(models.Model):
         ADD_DELEGATE = 'add_delegate', _('Add Delegate')
         REMOVE_DELEGATE = 'remove_delegate', _('Remove Delegate')
         TRANSFER = 'transfer', _('Transfer')
-        CHOICES = {LOGIN, UPDATE_PROFILE, ADD_DELEGATE, REMOVE_DELEGATE, TRANSFER}
+      # CHOICES = {LOGIN, UPDATE_PROFILE, ADD_DELEGATE, REMOVE_DELEGATE, TRANSFER}
 
     
     class Status(models.TextChoices):

@@ -12,7 +12,6 @@ from organization_endpoints.models import Organization
 # ============================================================
 # Device
 # ============================================================
-
 class Device(models.Model):
 
     PLATFORM_CHOICES = [
@@ -53,6 +52,11 @@ class Device(models.Model):
 
     is_active = models.BooleanField(default=True)
 
+    # NEW
+    # trusted devices allowed for verification flows
+
+    is_trusted = models.BooleanField(default=False)
+
     is_primary_device = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -60,6 +64,7 @@ class Device(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+
         db_table = "devices"
 
         constraints = [
@@ -75,9 +80,17 @@ class Device(models.Model):
             models.Index(fields=["app_instance_id"]),
         ]
 
+    @property
+    def active_key(self):
+
+        return (
+            self.keys.filter(is_active=True)
+            .order_by("-created_at")
+            .first()
+        )
+
     def __str__(self):
         return f"{self.user} - {self.platform} ({self.id})"
-
 
 # ============================================================
 # Device Key
@@ -241,3 +254,4 @@ class DeviceRevocationLog(models.Model):
             f"{self.revoked_by_actor_type} - "
             f"{self.reason or 'no_reason'}"
         )
+    

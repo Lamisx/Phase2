@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Organization, OrganizationApiKey, OrganizationUser
+from .models import Organization, OrganizationApiKey, OrganizationUser 
 
 
 @admin.register(Organization)
@@ -35,3 +35,14 @@ class OrganizationUserAdmin(admin.ModelAdmin):
     list_filter = ("role", "status", "organization")
     search_fields = ("external_user_ref", "user__username")
     readonly_fields = ("id", "created_at", "updated_at")
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+
+    readonly_fields = [field.name for field in AuditLog._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
