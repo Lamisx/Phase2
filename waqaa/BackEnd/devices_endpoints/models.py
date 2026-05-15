@@ -1,95 +1,243 @@
+# FULL corrected file
+
 import uuid
+
 from django.db import models
+from django.db.models import Q
+
 from accounts_endpoints.models import WaqaUser
-from organization_endpoints.models import Organization, OrganizationUser
+from organization_endpoints.models import Organization
+
+
 # ============================================================
 # Device
 # ============================================================
 
 class Device(models.Model):
+
     PLATFORM_CHOICES = [
-        ('android', 'Android'), ('ios', 'iOS'),
-        ('web', 'Web'), ('desktop', 'Desktop')
+        ("android", "Android"),
+        ("ios", "iOS"),
+        ("web", "Web"),
+        ("desktop", "Desktop"),
     ]
 
-    id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user            = models.ForeignKey(WaqaUser, on_delete=models.CASCADE, related_name='devices')
-    label           = models.CharField(max_length=100, null=True, blank=True)
-    platform        = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
-    app_instance_id = models.CharField(max_length=100, null=True, blank=True)
-    is_active       = models.BooleanField(default=True)
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    user = models.ForeignKey(
+        WaqaUser,
+        on_delete=models.CASCADE,
+        related_name="devices",
+    )
+
+    label = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+    )
+
+    platform = models.CharField(
+        max_length=20,
+        choices=PLATFORM_CHOICES,
+    )
+
+    app_instance_id = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+    )
+
+    is_active = models.BooleanField(default=True)
+
     is_primary_device = models.BooleanField(default=False)
-    created_at      = models.DateTimeField(auto_now_add=True)
-    updated_at      = models.DateTimeField(auto_now=True)
 
-    # class Meta:
-    #     db_table = 'devices'
+    created_at = models.DateTimeField(auto_now_add=True)
 
-    # [FIX] أضفنا UniqueConstraint على is_primary_device
-    # المشكلة: الكود القديم ما كان يمنع المستخدم من امتلاك أكثر من جهاز أساسي (primary) واحد
-    # يعني كان ممكن يصير عند نفس المستخدم جهازين أو أكثر كلهم is_primary_device=True
-    # وهذا يسبب تعارض في منطق المشروع لأن الـ OTP مرتبط بجهاز أساسي واحد فقط
-    # الحل: أضفنا constraint على مستوى قاعدة البيانات يمنع هذا التعارض نهائياً
-class Meta:
-    db_table = 'devices'
-    constraints = [
-        models.UniqueConstraint(
-            fields=['user'],
-            condition=models.Q(is_primary_device=True),
-            name='unique_primary_device_per_user'
-        )
-    ]
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "devices"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=Q(is_primary_device=True),
+                name="unique_primary_device_per_user",
+            ),
+        ]
+
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["app_instance_id"]),
+        ]
+
     def __str__(self):
-        return f"{self.user} — {self.platform} ({self.id})"
+        return f"{self.user} - {self.platform} ({self.id})"
+
+
 # ============================================================
 # Device Key
 # ============================================================
-class DeviceKey(models.Model):
-    PURPOSE_CHOICES  = [('auth', 'Auth'), ('approval', 'Approval')]
-    ALGORITHM_CHOICES = [('ES256', 'ES256'), ('ES384', 'ES384'), ('RS256', 'RS256'), ('Ed25519', 'Ed25519')]
-    FORMAT_CHOICES   = [('COSE', 'COSE'), ('JWK', 'JWK'), ('PEM', 'PEM'), ('RAW', 'RAW')]
 
-    id                = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    device            = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='keys')
-    organization      = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='device_keys')
-    key_purpose       = models.CharField(max_length=20, choices=PURPOSE_CHOICES)
-    algorithm         = models.CharField(max_length=20, choices=ALGORITHM_CHOICES)
-    key_format        = models.CharField(max_length=10, choices=FORMAT_CHOICES)
-    public_key        = models.TextField()
-    attestation_type  = models.CharField(max_length=50, null=True, blank=True)
-    attestation_data  = models.JSONField(null=True, blank=True)
-    is_active         = models.BooleanField(default=True)
-    last_used_at      = models.DateTimeField(null=True, blank=True)
-    revoked_at        = models.DateTimeField(null=True, blank=True)
-    revocation_reason = models.CharField(max_length=255, null=True, blank=True)
-    created_at        = models.DateTimeField(auto_now_add=True)
+class DeviceKey(models.Model):
+
+    PURPOSE_CHOICES = [
+        ("auth", "Auth"),
+        ("approval", "Approval"),
+    ]
+
+    ALGORITHM_CHOICES = [
+        ("ES256", "ES256"),
+        ("ES384", "ES384"),
+        ("RS256", "RS256"),
+        ("Ed25519", "Ed25519"),
+    ]
+
+    FORMAT_CHOICES = [
+        ("COSE", "COSE"),
+        ("JWK", "JWK"),
+        ("PEM", "PEM"),
+        ("RAW", "RAW"),
+    ]
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+
+    device = models.ForeignKey(
+        Device,
+        on_delete=models.CASCADE,
+        related_name="keys",
+    )
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="device_keys",
+    )
+
+    key_purpose = models.CharField(
+        max_length=20,
+        choices=PURPOSE_CHOICES,
+    )
+
+    algorithm = models.CharField(
+        max_length=20,
+        choices=ALGORITHM_CHOICES,
+    )
+
+    key_format = models.CharField(
+        max_length=10,
+        choices=FORMAT_CHOICES,
+    )
+
+    public_key = models.TextField()
+
+    attestation_type = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+    )
+
+    attestation_data = models.JSONField(
+        null=True,
+        blank=True,
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    last_used_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    revoked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    revocation_reason = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'device_keys'
-        unique_together = [('device', 'organization', 'key_purpose')]
+        db_table = "device_keys"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device", "organization", "key_purpose"],
+                condition=Q(is_active=True),
+                name="unique_active_device_key_per_scope",
+            ),
+        ]
+
+        indexes = [
+            models.Index(fields=["device", "is_active"]),
+            models.Index(fields=["organization", "is_active"]),
+        ]
 
     def __str__(self):
-        return f"{self.device} — {self.key_purpose} ({self.algorithm})"
-    
-   
+        return (
+            f"{self.device} - "
+            f"{self.key_purpose} "
+            f"({self.algorithm})"
+        )
+
 
 # ============================================================
-# Audit Logs (Append-only, no FK)
+# Device Revocation Log
 # ============================================================
 
 class DeviceRevocationLog(models.Model):
-    ACTOR_CHOICES = [('org', 'Org'), ('user', 'User'), ('system', 'System')]
 
-    id                    = models.BigAutoField(primary_key=True)
-    device_id             = models.UUIDField()
-    user_id               = models.UUIDField(null=True, blank=True)
-    revoked_by_actor_type = models.CharField(max_length=10, choices=ACTOR_CHOICES)
-    revoked_by_actor_id   = models.UUIDField(null=True, blank=True)
-    reason                = models.TextField(null=True, blank=True)
-    created_at            = models.DateTimeField(auto_now_add=True)
+    ACTOR_CHOICES = [
+        ("org", "Organization"),
+        ("user", "User"),
+        ("system", "System"),
+    ]
+
+    id = models.BigAutoField(primary_key=True)
+
+    device_id = models.UUIDField()
+
+    user_id = models.UUIDField(
+        null=True,
+        blank=True,
+    )
+
+    revoked_by_actor_type = models.CharField(
+        max_length=10,
+        choices=ACTOR_CHOICES,
+    )
+
+    revoked_by_actor_id = models.UUIDField(
+        null=True,
+        blank=True,
+    )
+
+    reason = models.TextField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'device_revocation_log'
-        managed  = False  # no FK — immutable log
+        db_table = "device_revocation_log"
 
-
+    def __str__(self):
+        return (
+            f"RevocationLog[{self.id}] "
+            f"{self.revoked_by_actor_type} - "
+            f"{self.reason or 'no_reason'}"
+        )
