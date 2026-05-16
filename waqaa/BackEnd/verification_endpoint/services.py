@@ -3,14 +3,13 @@ import secrets
 import hashlib
 from datetime import timedelta
 from typing import Optional, Tuple
-from .authentication import hash_api_key
 from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ed25519, ec
+from cryptography.hazmat.primitives.asymmetric import ec
 from devices_endpoints.models import Device
 from organization_endpoints.models import OrganizationUser
 from .models import (
@@ -95,7 +94,7 @@ def write_audit(
             action=action,
             result=result,
             ip_address=ip_address,
-            user_agent=user_agent,
+            user_agent=user_agent,#مافيه بالمودل 
             metadata=metadata or {},
         )
     except Exception:
@@ -192,52 +191,51 @@ def _delegation_permits(delegation, operation_type: str) -> bool:
 def _load_device_public_key(device: Device):
 
     active_key = getattr(device, "active_key", None)
+
     if active_key is not None:
+
         raw = getattr(active_key, "public_key_bytes", None)
+
         if raw:
-            algorithm = (getattr(active_key, "algorithm", "") or "").lower()
 
-            if algorithm in ("ed25519", "eddsa"):
-                return ed25519.Ed25519PublicKey.from_public_bytes(raw)
-            if algorithm in ("ecdsa", "ecdsa-p256", "ec", "p256", "secp256r1"):
-                return ec.EllipticCurvePublicKey.from_encoded_point(
-                    ec.SECP256R1(), raw
-                )
-
-            if len(raw) == 32:
-                return ed25519.Ed25519PublicKey.from_public_bytes(raw)
-            if len(raw) == 65 and raw[:1] == b"\x04":
-                return ec.EllipticCurvePublicKey.from_encoded_point(
-                    ec.SECP256R1(), raw
-                )
-            raise ValueError("unsupported_raw_public_key_format")
+            return ec.EllipticCurvePublicKey.from_encoded_point(
+                ec.SECP256R1(),
+                raw
+            )
 
     pem = getattr(device, "public_key", None)
+
     if pem:
+
         if isinstance(pem, str):
             pem = pem.encode("utf-8")
+
         public_key = serialization.load_pem_public_key(pem)
-        if isinstance(public_key, ed25519.Ed25519PublicKey):
-            return public_key
+
         if isinstance(public_key, ec.EllipticCurvePublicKey):
             return public_key
-        raise ValueError("unsupported_pem_public_key_type")
+
+        raise ValueError("unsupported_public_key_type")
+
     raise ValueError("device_public_key_missing")
 
 def _verify_signature(public_key, message: bytes, signature: bytes) -> bool:
 
     try:
-        if isinstance(public_key, ed25519.Ed25519PublicKey):
-            public_key.verify(signature, message)
-            return True
-        if isinstance(public_key, ec.EllipticCurvePublicKey):
-            public_key.verify(signature, message, ec.ECDSA(hashes.SHA256()))
-            return True
+
+        public_key.verify(
+            signature,
+            message,
+            ec.ECDSA(hashes.SHA256())
+        )
+
+        return True
+
     except InvalidSignature:
         return False
+
     except Exception:
         return False
-    return False
 
 # ============================================================
 # Session creation + challenge issuance

@@ -122,15 +122,8 @@ class VerificationSession(models.Model):
         if commit:
             self.save(update_fields=['status', 'failure_reason'])
         return True
-    def mark_as_used(self, commit: bool = True) -> bool:
-        if self.is_used or not self.is_active:
-            return False
-        self.is_used = True
-        self.is_active = False
-        self.used_at = timezone.now()
-        if commit:
-            self.save(update_fields=['is_used', 'is_active', 'used_at'])
-        return True
+    
+   
 # ============================================================
 # Verification Challenge
 # ============================================================
@@ -176,6 +169,15 @@ class VerificationChallenge(models.Model):
             and not self.is_used
             and not self.is_expired
         )
+    def mark_as_used(self, commit: bool = True) -> bool:
+        if self.is_used or not self.is_active:
+            return False
+        self.is_used = True
+        self.is_active = False
+        self.used_at = timezone.now()
+        if commit:
+            self.save(update_fields=['is_used', 'is_active', 'used_at'])
+        return True
  
 # ============================================================
 # AuditLog

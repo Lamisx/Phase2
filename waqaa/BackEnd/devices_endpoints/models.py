@@ -69,15 +69,15 @@ class Device(models.Model):
 
         constraints = [
             models.UniqueConstraint(
+                fields=["user", "app_instance_id"],
+                name="unique_app_instance_per_user",
+            ),
+
+            models.UniqueConstraint(
                 fields=["user"],
                 condition=Q(is_primary_device=True),
                 name="unique_primary_device_per_user",
             ),
-        ]
-
-        indexes = [
-            models.Index(fields=["user", "is_active"]),
-            models.Index(fields=["app_instance_id"]),
         ]
 
     @property

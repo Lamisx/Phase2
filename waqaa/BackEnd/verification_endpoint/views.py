@@ -7,7 +7,9 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.throttling import ScopedRateThrottle
 from organization_endpoints.models import OrganizationUser
-from .authentication import OrganizationAPIKeyAuthentication
+from organization_endpoints.authentication import (
+    OrganizationAPIKeyAuthentication
+)
 from .models import (
     VerificationSession,
     AuditLog,
