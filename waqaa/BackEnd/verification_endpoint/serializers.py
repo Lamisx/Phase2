@@ -1,25 +1,89 @@
-from rest_framework import serializers
-from .models import AuditLog, KeyUsageLog, VerificationSession, VerificationChallenge
-from organization_endpoints.models import Organization
-from django.utils import timezone
-from django.db import transaction
+"""Verification endpoint serializers."""
 import base64
 
+from rest_framework import serializers
 
-class OperationType:
-    LOGIN = "login"
-    UPDATE_PROFILE = "update_profile"
-    ADD_DELEGATE = "add_delegate"
-    REMOVE_DELEGATE = "remove_delegate"
-    TRANSFER = "transfer"
+from .models import (
+    AuditLog,
+    KeyUsageLog,
+    VerificationChallenge,
+    VerificationSession,
+)
 
-    CHOICES = {LOGIN, UPDATE_PROFILE, ADD_DELEGATE, REMOVE_DELEGATE, TRANSFER}
 
 # ============================================================
-# Verification Endpoint Serializers
-# ===========================================================
+# Inputs
+# ============================================================
+class CreateSessionInputSerializer(serializers.Serializer):
+    """Input for POST /api/verification/sessions/create/.
+
+    The calling organization is identified by the X-API-Key header
+    (OrganizationAPIKeyAuthentication), NEVER from this body.
+    """
+
+    external_user_ref = serializers.CharField(
+        required=True, max_length=255, trim_whitespace=True,
+    )
+    org_operation_ref = serializers.CharField(
+        required=True, max_length=255, trim_whitespace=True,
+    )
+    operation_type = serializers.ChoiceField(
+        choices=VerificationSession.OperationType.choices,
+        required=True,
+    )
+    operation_hash = serializers.CharField(
+        required=False, allow_blank=True, max_length=128,
+    )
+    operation_payload_encrypted = serializers.CharField(
+        required=False, allow_blank=True,
+    )
+
+    def validate_org_operation_ref(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Operation reference cannot be empty.")
+        return value
+
+    def validate(self, data):
+        # Business rule: TRANSFER operations must be referenced as "txn_*".
+        if data.get("operation_type") == VerificationSession.OperationType.TRANSFER:
+            ref = data.get("org_operation_ref", "")
+            if not ref.startswith("txn_"):
+                raise serializers.ValidationError({
+                    "org_operation_ref": "Transfer operations must start with 'txn_'.",
+                })
+        return data
+
+
+class VerifySignatureInputSerializer(serializers.Serializer):
+    """Input for POST /api/verification/sessions/<id>/verify/ (no auth header).
+
+    The device proves itself by signing the challenge with the private key
+    whose public counterpart is registered on the server.
+    """
+
+    device_id = serializers.UUIDField()
+    signature = serializers.CharField(max_length=4096, trim_whitespace=True)
+
+    def validate_signature(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Signature is required.")
+        try:
+            base64.b64decode(value, validate=True)
+        except Exception:
+            raise serializers.ValidationError("Invalid signature format.")
+        return value
+
+
+# ============================================================
+# Outputs
+# ============================================================
 class VerificationChallengeSerializer(serializers.ModelSerializer):
+    """Public challenge representation (forensic listing)."""
+
     is_expired = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = VerificationChallenge
         fields = [
@@ -27,79 +91,23 @@ class VerificationChallengeSerializer(serializers.ModelSerializer):
             "attempt_number",
             "expires_at",
             "is_expired",
+            "is_active",
+            "is_used",
+            "used_at",
+            "created_at",
         ]
+        read_only_fields = fields
 
-# ============================================================
-# Internal Serializers (for internal use, not exposed via API)
-# ============================================================
-class VerificationChallengeInternalSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = VerificationChallenge
-        fields = '__all__'
-
-
-class CreateSessionSerializer(serializers.Serializer):
-    organization_api_key = serializers.CharField(required=True,write_only=True,max_length=255,trim_whitespace=True)
-    external_user_ref    = serializers.CharField(required=True,write_only=True,max_length=255,trim_whitespace=True)
-    org_operation_ref    = serializers.CharField(required=True,write_only=True,max_length=255,trim_whitespace=True)
-    operation_type       = serializers.CharField(required=True ,write_only=True,max_length=255,trim_whitespace=True)
-    
-    def validate_organization_api_key(self, value):
-        value = value.strip()
-        if not value:
-            raise serializers.ValidationError("API key is required")
-        if len(value) < 20:
-            raise serializers.ValidationError("Invalid API key format")
-        return value
-
-    def validate_org_operation_ref(self, value):
-        value = value.strip()
-        if not value:
-            raise serializers.ValidationError("Operation reference cannot be empty")
-        return value
-
-    def validate_operation_type(self, value):
-        value = value.strip().lower()
-        if value not in OperationType.CHOICES:
-            raise serializers.ValidationError("Invalid operation type")
-        return value
-
-    def validate(self, data):
-        if data["operation_type"] == OperationType.TRANSFER:
-            if not data["org_operation_ref"].startswith("txn_"):
-                raise serializers.ValidationError({
-                    "org_operation_ref": "Transfer operations must start with 'txn_'"
-                })
-        return data
-
-class VerifySessionSerializer(serializers.Serializer):
-    session_id = serializers.UUIDField()
-    device_id = serializers.UUIDField()
-    signature = serializers.CharField(max_length=4096, trim_whitespace=True)
-
-    def validate_signature(self, value):
-        value = value.strip()
-        if not value:
-            raise serializers.ValidationError("Signature is required")
-        try:
-            import base64
-            base64.b64decode(value, validate=True)
-        except Exception:
-            raise serializers.ValidationError("Invalid signature format")
-        return value
-    def validate(self, data):
-        session_id = data.get("session_id")
-        if not VerificationSession.objects.filter(id=session_id).exists():
-            raise serializers.ValidationError("Session not found")
-        return data
 
 class SessionStatusSerializer(serializers.ModelSerializer):
+    """Full session status payload — used in responses and polling."""
+
     is_expired = serializers.BooleanField(read_only=True)
     is_final = serializers.BooleanField(read_only=True)
     can_be_verified = serializers.BooleanField(read_only=True)
     attempts_exhausted = serializers.BooleanField(read_only=True)
     remaining_attempts = serializers.IntegerField(read_only=True)
-    
+
     class Meta:
         model = VerificationSession
         fields = [
@@ -121,8 +129,9 @@ class SessionStatusSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+
 # ============================================================
-# Logs
+# Logs (read-only)
 # ============================================================
 class AuditLogSerializer(serializers.ModelSerializer):
     class Meta:
@@ -137,11 +146,13 @@ class AuditLogSerializer(serializers.ModelSerializer):
             "action",
             "result",
             "ip_address",
+            "user_agent",
             "created_at",
             "metadata",
         ]
         read_only_fields = fields
-        
+
+
 class KeyUsageLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = KeyUsageLog

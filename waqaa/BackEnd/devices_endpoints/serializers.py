@@ -1,14 +1,8 @@
-# FULL corrected file
-
 from rest_framework import serializers
 
-from .models import (
-    Device,
-    DeviceKey,
-    DeviceRevocationLog,
-)
+from .models import Device,DeviceKey, DeviceRevocationLog
 
-from accounts_endpoints.serializers import UserSerializer
+from accounts_endpoints.serializers import AccountSerializer
 from organization_endpoints.serializers import OrganizationSerializer
 
 
@@ -17,16 +11,7 @@ from organization_endpoints.serializers import OrganizationSerializer
 # ============================================================
 
 class DeviceCreateSerializer(serializers.Serializer):
-
-    # user_id intentionally removed
-    # authenticated user is taken securely from request.user
-
-    label = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=100,
-    )
-
+    label = serializers.CharField(required=False,allow_blank=True,max_length=100,)
     platform = serializers.ChoiceField(
         choices=[
             "android",
@@ -37,20 +22,12 @@ class DeviceCreateSerializer(serializers.Serializer):
         required=True,
     )
 
-    app_instance_id = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=100,
-    )
+    app_instance_id = serializers.CharField(required=False,allow_blank=True,max_length=100,)
 
     def validate_app_instance_id(self, value):
 
-        value = value.strip()
-
-        if not value:
-            return None
-
-        return value
+        value = (value or "").strip()   
+        return value or None
 
 
 # ============================================================
@@ -58,19 +35,10 @@ class DeviceCreateSerializer(serializers.Serializer):
 # ============================================================
 
 class DeviceSerializer(serializers.ModelSerializer):
-
-    # nested user details
-    # useful for frontend/admin panels
-
-    user_detail = UserSerializer(
-        source="user",
-        read_only=True,
-    )
+    user_detail = AccountSerializer(source="user",read_only=True,)
 
     class Meta:
-
         model = Device
-
         fields = [
             "id",
             "user_detail",
@@ -82,15 +50,7 @@ class DeviceSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-
-        read_only_fields = [
-            "id",
-            "is_primary_device",
-            "is_active",
-            "created_at",
-            "updated_at",
-        ]
-
+        read_only_fields = fields
 
 # ============================================================
 # Device Key Serializer
@@ -101,61 +61,28 @@ class DeviceKeySerializer(serializers.ModelSerializer):
     # nested serializers improve frontend UX
     # and reduce additional API requests
 
-    device_detail = DeviceSerializer(
-        source="device",
-        read_only=True,
-    )
-
-    organization_detail = OrganizationSerializer(
-        source="organization",
-        read_only=True,
-    )
+    device_detail = DeviceSerializer(source="device",read_only=True,)
+    organization_detail = OrganizationSerializer(source="organization",read_only=True,)
 
     class Meta:
-
         model = DeviceKey
-
         fields = [
             "id",
-
-            # organization
             "organization",
             "organization_detail",
-
-            # device
             "device",
             "device_detail",
-
-            # key metadata
             "key_purpose",
             "algorithm",
             "key_format",
-
-            # intentionally hidden:
-            # public_key
-            # attestation_data
-
             "attestation_type",
-
-            # state
             "is_active",
             "last_used_at",
             "revoked_at",
             "revocation_reason",
-
-            # timestamps
             "created_at",
         ]
-
-        read_only_fields = [
-            "id",
-            "created_at",
-            "last_used_at",
-            "revoked_at",
-            "revocation_reason",
-            "attestation_type",
-        ]
-
+        read_only_fields = fields
 
 # ============================================================
 # Register Device Key Serializer
@@ -164,32 +91,16 @@ class DeviceKeySerializer(serializers.ModelSerializer):
 class RegisterDeviceKeySerializer(serializers.Serializer):
 
     device_id = serializers.UUIDField()
-
     organization_id = serializers.UUIDField()
-
     public_key = serializers.CharField()
-
-    algorithm = serializers.ChoiceField(
-        choices=["Ed25519"]
-    )
-
-    key_format = serializers.ChoiceField(
-        choices=["RAW"]
-    )
-
-    key_purpose = serializers.ChoiceField(
-        choices=["auth", "approval"]
-    )
+    algorithm = serializers.ChoiceField(choices=["Ed25519"])
+    key_format = serializers.ChoiceField(choices=["RAW"])
+    key_purpose = serializers.ChoiceField(choices=["auth", "approval"])
 
     def validate_public_key(self, value):
-
-        value = value.strip()
-
+        value = (value or "").strip()
         if len(value) < 20:
-            raise serializers.ValidationError(
-                "Invalid public key."
-            )
-
+            raise serializers.ValidationError("Invalid public key.")
         return value
 
 

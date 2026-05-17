@@ -1,20 +1,19 @@
-from django.db import IntegrityError
-from django.db import transaction
-from django.utils import timezone
+"""
+Device endpoints — thin wrappers around the service layer.
 
+All endpoints require an authenticated AccountUser (JWT). The user is
+taken from request.user; never from request data.
+
+Views are intentionally minimal: they handle input parsing, call the
+service, and serialize the response. All business logic lives in
+services.py.
+"""
 from rest_framework import status
-from rest_framework.decorators import (
-    api_view,
-    permission_classes,
-)
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import (
-    Device,
-    DeviceKey,
-    DeviceRevocationLog,
-)
+from core.utils import get_client_ip, get_user_agent
 
 from .serializers import (
     DeviceCreateSerializer,
@@ -22,106 +21,44 @@ from .serializers import (
     DeviceSerializer,
     RegisterDeviceKeySerializer,
 )
-
-from organization_endpoints.models import Organization
-
-from core.utils import (
-    get_client_ip,
-    get_user_agent,
-)
-
-
-# ============================================================
-# Helpers
-# ============================================================
-
-def _is_user_active(user) -> bool:
-    """
-    Keep compatibility with current account implementation.
-    """
-
-    if hasattr(user, "is_active"):
-        return bool(user.is_active)
-
-    return True
-
-
-def _log_device_revocation(
-    *,
-    device,
-    actor_type,
-    actor_id=None,
-    reason=None,
-):
-    DeviceRevocationLog.objects.create(
-        device_id=device.id,
-        user_id=device.user_id,
-        revoked_by_actor_type=actor_type,
-        revoked_by_actor_id=actor_id,
-        reason=reason,
-    )
+from .services import AccessDecisionService, DeviceKeyService, DeviceService
 
 
 # ============================================================
 # Device APIs
 # ============================================================
-
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@transaction.atomic
 def create_device(request):
+    """Register a new device for the authenticated user.
 
-    if not _is_user_active(request.user):
-        return Response(
-            {"error": "ACCOUNT_INACTIVE"},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-
+    Idempotent on app_instance_id: if the same instance already has
+    an active device, returns the existing one with 409.
+    """
     serializer = DeviceCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
 
-    app_instance_id = serializer.validated_data.get(
-        "app_instance_id"
+    # Idempotency: if this app_instance is already registered, hand it back.
+    existing = DeviceService.find_existing_active_device(
+        user=request.user,
+        app_instance_id=data.get("app_instance_id"),
     )
-
-    existing_device = None
-
-    if app_instance_id:
-        existing_device = Device.objects.filter(
-            user=request.user,
-            app_instance_id=app_instance_id,
-            is_active=True,
-        ).first()
-
-    if existing_device:
+    if existing:
         return Response(
             {
                 "error": "DEVICE_ALREADY_REGISTERED",
-                "device_id": str(existing_device.id),
+                "device_id": str(existing.id),
             },
             status=status.HTTP_409_CONFLICT,
         )
 
-    has_primary = Device.objects.filter(
+    device = DeviceService.create_device(
         user=request.user,
-        is_primary_device=True,
-        is_active=True,
-    ).exists()
-
-    try:
-        device = Device.objects.create(
-            user=request.user,
-            label=serializer.validated_data.get("label"),
-            platform=serializer.validated_data["platform"],
-            app_instance_id=app_instance_id,
-            is_primary_device=not has_primary,
-        )
-
-    except IntegrityError:
-        return Response(
-            {"error": "PRIMARY_DEVICE_CONFLICT"},
-            status=status.HTTP_409_CONFLICT,
-        )
+        platform=data["platform"],
+        label=data.get("label") or None,
+        app_instance_id=data.get("app_instance_id"),
+    )
 
     return Response(
         {
@@ -135,112 +72,26 @@ def create_device(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def list_my_devices(request):
-
-    devices = (
-        Device.objects
-        .filter(
-            user=request.user,
-            is_active=True,
-        )
-        .order_by("-created_at")
-    )
-
-    serializer = DeviceSerializer(
-        devices,
-        many=True,
-    )
-
+    """List active devices belonging to the authenticated user."""
+    devices = DeviceService.list_user_devices(user=request.user)
+    serializer = DeviceSerializer(devices, many=True)
     return Response(
-        {
-            "count": len(serializer.data),
-            "devices": serializer.data,
-        },
+        {"count": len(serializer.data), "devices": serializer.data},
         status=status.HTTP_200_OK,
     )
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@transaction.atomic
 def revoke_device(request, device_id):
-
-    try:
-        device = (
-            Device.objects
-            .select_for_update()
-            .get(
-                id=device_id,
-                user=request.user,
-            )
-        )
-
-    except Device.DoesNotExist:
-        return Response(
-            {"error": "DEVICE_NOT_FOUND"},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    if not device.is_active:
-        return Response(
-            {"error": "DEVICE_ALREADY_REVOKED"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    if device.is_primary_device:
-
-        replacement_device = (
-            Device.objects
-            .filter(
-                user=request.user,
-                is_active=True,
-                is_primary_device=False,
-            )
-            .exclude(id=device.id)
-            .order_by("created_at")
-            .first()
-        )
-
-        if replacement_device:
-            replacement_device.is_primary_device = True
-            replacement_device.save(
-                update_fields=["is_primary_device"]
-            )
-
-    device.is_active = False
-    device.is_primary_device = False
-
-    device.save(
-        update_fields=[
-            "is_active",
-            "is_primary_device",
-            "updated_at",
-        ]
+    """Revoke a device owned by the authenticated user."""
+    device = DeviceService.revoke_device(
+        device_id=device_id,
+        user=request.user,
+        reason=request.data.get("reason"),
     )
-
-    DeviceKey.objects.filter(
-        device=device,
-        is_active=True,
-    ).update(
-        is_active=False,
-        revoked_at=timezone.now(),
-        revocation_reason="device_revoked",
-    )
-
-    _log_device_revocation(
-        device=device,
-        actor_type="user",
-        actor_id=request.user.id,
-        reason=request.data.get(
-            "reason",
-            "device_revoked",
-        ),
-    )
-
     return Response(
-        {
-            "message": "DEVICE_REVOKED",
-            "device_id": str(device.id),
-        },
+        {"message": "DEVICE_REVOKED", "device_id": str(device.id)},
         status=status.HTTP_200_OK,
     )
 
@@ -248,65 +99,22 @@ def revoke_device(request, device_id):
 # ============================================================
 # Device Key APIs
 # ============================================================
-
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@transaction.atomic
 def register_device_key(request):
-
-    serializer = RegisterDeviceKeySerializer(
-        data=request.data
-    )
-
+    """Register a new public key for a (device, organization, purpose) scope."""
+    serializer = RegisterDeviceKeySerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
 
-    try:
-        device = Device.objects.select_for_update().get(
-            id=serializer.validated_data["device_id"],
-            user=request.user,
-            is_active=True,
-        )
-
-    except Device.DoesNotExist:
-        return Response(
-            {"error": "DEVICE_NOT_FOUND"},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    try:
-        organization = Organization.objects.get(
-            id=serializer.validated_data["organization_id"]
-        )
-
-    except Organization.DoesNotExist:
-        return Response(
-            {"error": "ORG_NOT_FOUND"},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    # TODO:
-    # verification module integration should validate
-    # cryptographic attestation before trusting device keys.
-
-    DeviceKey.objects.filter(
-        device=device,
-        organization=organization,
-        key_purpose="auth",
-        is_active=True,
-    ).update(
-        is_active=False,
-        revoked_at=timezone.now(),
-        revocation_reason="key_rotated",
-    )
-
-    device_key = DeviceKey.objects.create(
-        device=device,
-        organization=organization,
-        key_purpose="auth",
-        algorithm=serializer.validated_data["algorithm"],
-        key_format=serializer.validated_data["key_format"],
-        public_key=serializer.validated_data["public_key"],
-        is_active=True,
+    device_key = DeviceKeyService.register_key(
+        user=request.user,
+        device_id=data["device_id"],
+        organization_id=data["organization_id"],
+        public_key=data["public_key"],
+        algorithm=data["algorithm"],
+        key_format=data["key_format"],
+        key_purpose=data["key_purpose"],
     )
 
     return Response(
@@ -321,92 +129,29 @@ def register_device_key(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def list_device_keys(request, device_id):
-
-    try:
-        device = Device.objects.get(
-            id=device_id,
-            user=request.user,
-            is_active=True,
-        )
-
-    except Device.DoesNotExist:
-        return Response(
-            {"error": "DEVICE_NOT_FOUND"},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    keys = (
-        DeviceKey.objects
-        .filter(
-            device=device,
-            is_active=True,
-        )
-        .select_related("organization")
-        .order_by("-created_at")
+    """List active keys for one of the caller's devices."""
+    keys = DeviceKeyService.list_device_keys(
+        user=request.user,
+        device_id=device_id,
     )
-
-    serializer = DeviceKeySerializer(
-        keys,
-        many=True,
-    )
-
+    serializer = DeviceKeySerializer(keys, many=True)
     return Response(
-        {
-            "count": len(serializer.data),
-            "keys": serializer.data,
-        },
+        {"count": len(serializer.data), "keys": serializer.data},
         status=status.HTTP_200_OK,
     )
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@transaction.atomic
 def revoke_device_key(request, device_key_id):
-
-    try:
-        device_key = (
-            DeviceKey.objects
-            .select_related("device")
-            .get(
-                id=device_key_id,
-                device__user=request.user,
-            )
-        )
-
-    except DeviceKey.DoesNotExist:
-        return Response(
-            {"error": "DEVICE_KEY_NOT_FOUND"},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    if not device_key.is_active:
-        return Response(
-            {"error": "DEVICE_KEY_ALREADY_REVOKED"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    device_key.is_active = False
-    device_key.revoked_at = timezone.now()
-
-    device_key.revocation_reason = request.data.get(
-        "reason",
-        "revoked_by_api",
+    """Revoke a single device key without revoking the whole device."""
+    device_key = DeviceKeyService.revoke_key(
+        user=request.user,
+        device_key_id=device_key_id,
+        reason=request.data.get("reason"),
     )
-
-    device_key.save(
-        update_fields=[
-            "is_active",
-            "revoked_at",
-            "revocation_reason",
-        ]
-    )
-
     return Response(
-        {
-            "message": "DEVICE_KEY_REVOKED",
-            "device_key_id": str(device_key.id),
-        },
+        {"message": "DEVICE_KEY_REVOKED", "device_key_id": str(device_key.id)},
         status=status.HTTP_200_OK,
     )
 
@@ -414,11 +159,11 @@ def revoke_device_key(request, device_key_id):
 # ============================================================
 # Access Decision
 # ============================================================
-
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def access_decision(request):
-
+    """Quick yes/no check: does the caller's device have an active key
+    for the given organization?"""
     device_id = request.data.get("device_id")
     organization_id = request.data.get("organization_id")
 
@@ -427,44 +172,30 @@ def access_decision(request):
             {"error": "DEVICE_ID_REQUIRED"},
             status=status.HTTP_400_BAD_REQUEST,
         )
-
     if not organization_id:
         return Response(
             {"error": "ORGANIZATION_ID_REQUIRED"},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    try:
-        device = Device.objects.get(
-            id=device_id,
-            user=request.user,
-            is_active=True,
-        )
-
-    except Device.DoesNotExist:
-
-        return Response(
-            {
-                "access": "unknown_device",
-                "ip": get_client_ip(request),
-                "user_agent": get_user_agent(request),
-            },
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    has_valid_key = DeviceKey.objects.filter(
-        device=device,
+    result = AccessDecisionService.evaluate(
+        user=request.user,
+        device_id=device_id,
         organization_id=organization_id,
-        is_active=True,
-    ).exists()
+    )
 
-    if has_valid_key:
-        return Response(
-            {"access": "granted"},
-            status=status.HTTP_200_OK,
-        )
+    if result == AccessDecisionService.GRANTED:
+        return Response({"access": "granted"}, status=status.HTTP_200_OK)
 
+    if result == AccessDecisionService.DENIED:
+        return Response({"access": "denied"}, status=status.HTTP_403_FORBIDDEN)
+
+    # UNKNOWN_DEVICE
     return Response(
-        {"access": "denied"},
-        status=status.HTTP_403_FORBIDDEN,
+        {
+            "access": "unknown_device",
+            "ip": get_client_ip(request),
+            "user_agent": get_user_agent(request),
+        },
+        status=status.HTTP_404_NOT_FOUND,
     )
