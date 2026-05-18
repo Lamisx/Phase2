@@ -13,13 +13,12 @@ from rest_framework import generics, permissions, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
 from core.utils import get_client_ip, get_user_agent
 from organization_endpoints.authentication import OrganizationAPIKeyAuthentication
 from organization_endpoints.models import OrganizationApiKey, OrganizationUser
 from organization_endpoints.permissions import HasOrganizationAPIKey, HasScope
-
 from .models import AuditLog, KeyUsageLog, VerificationSession
+from rest_framework.throttling import ScopedRateThrottle
 from .serializers import (
     AuditLogSerializer,
     CreateSessionInputSerializer,
