@@ -1,10 +1,4 @@
-"""
-Organization endpoints — all authenticated via X-API-Key.
- 
-The organization is identified by the API key; no path/query parameter
-ever decides which organization a request operates on. This prevents
-cross-organization data leaks even if a UUID is guessed.
-"""
+
 from django.db import IntegrityError
 from rest_framework import status
 from rest_framework.response import Response

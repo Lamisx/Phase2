@@ -13,12 +13,13 @@ from rest_framework import generics, permissions, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
 from core.utils import get_client_ip, get_user_agent
 from organization_endpoints.authentication import OrganizationAPIKeyAuthentication
 from organization_endpoints.models import OrganizationApiKey, OrganizationUser
 from organization_endpoints.permissions import HasOrganizationAPIKey, HasScope
+
 from .models import AuditLog, KeyUsageLog, VerificationSession
-from rest_framework.throttling import ScopedRateThrottle
 from .serializers import (
     AuditLogSerializer,
     CreateSessionInputSerializer,
@@ -431,9 +432,5 @@ class KeyUsageLogListView(generics.ListAPIView):
             qs = qs.filter(action=v)
         if v := params.get("result"):
             qs = qs.filter(result=v)
-        if v := params.get("from"):
-            qs = qs.filter(created_at__gte=v)
-        if v := params.get("to"):
-            qs = qs.filter(created_at__lte=v)
 
         return qs.order_by("-created_at")

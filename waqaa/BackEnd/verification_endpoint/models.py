@@ -1,16 +1,4 @@
-"""
-Verification endpoint models.
 
-The verification flow:
-    1. Organization creates a VerificationSession + first VerificationChallenge.
-    2. User's device signs the challenge bytes with its registered DeviceKey.
-    3. Server verifies the signature, evaluates trust, transitions session
-       to VERIFIED or DENIED, and returns a one-time decision_token.
-    4. Organization later calls back to verify the decision_token.
-
-AuditLog and KeyUsageLog are append-only logs — immutability is enforced
-at the application layer (admin disallows edits; no public write endpoints).
-"""
 import uuid
 
 from django.conf import settings
@@ -231,62 +219,6 @@ class VerificationChallenge(models.Model):
 # ============================================================
 # Audit Log (append-only)
 # ============================================================
-
-class VerificationChallenge(models.Model):
-    id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session         = models.ForeignKey(VerificationSession, on_delete=models.CASCADE, related_name='challenges')
-    challenge_bytes = models.TextField()
-    attempt_number  = models.PositiveSmallIntegerField()
-    is_active       = models.BooleanField(default=True)
-    is_used         = models.BooleanField(default=False)
-    used_at         = models.DateTimeField(null=True, blank=True)
-    expires_at      = models.DateTimeField()
-    created_at      = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'verification_challenges'
-        ordering = ['-created_at']
-        constraints = [
-            models.UniqueConstraint(
-                fields=['session', 'attempt_number'],
-                name='uq_challenge_session_attempt'
-            )
-        ]
-        indexes = [
-            models.Index(fields=['session', 'is_active', 'is_used'], name='idx_challenge_active_used'),
-            models.Index(fields=['expires_at'], name='idx_challenge_expires'),
-        ]
-        
-
-    def __str__(self):
-        return f"Challenge {self.attempt_number} — session {self.session_id}"
-    
-
-    @property
-    def is_expired(self) -> bool:
-        return timezone.now() >= self.expires_at
-    
-    @property
-    def is_valid(self) -> bool:
-        return (
-            self.is_active
-            and not self.is_used
-            and not self.is_expired
-        )
-    def mark_as_used(self, commit: bool = True) -> bool:
-        if self.is_used or not self.is_active:
-            return False
-        self.is_used = True
-        self.is_active = False
-        self.used_at = timezone.now()
-        if commit:
-            self.save(update_fields=['is_used', 'is_active', 'used_at'])
-        return True
- 
-# ============================================================
-# AuditLog
-# ============================================================
-    
 class AuditLog(models.Model):
     """Append-only audit trail.
 

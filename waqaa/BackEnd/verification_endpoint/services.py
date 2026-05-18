@@ -13,18 +13,17 @@ import hashlib
 import secrets
 from datetime import timedelta
 from typing import Optional, Tuple
+
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+
 from accounts_endpoints.models import UserDelegation
 from devices_endpoints.models import Device, DeviceKey
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from devices_endpoints.models import Device
-from organization_endpoints.models import OrganizationUser
+
 from .models import (
     AuditLog,
     KeyUsageLog,
@@ -94,7 +93,7 @@ def write_audit(*, organization_id=None, session_id=None, device_id=None,
             action=action,
             result=result,
             ip_address=ip_address,
-            user_agent=user_agent,#مافيه بالمودل 
+            user_agent=user_agent,
             metadata=metadata or {},
         )
     except Exception:
@@ -185,7 +184,6 @@ class TrustEngine:
 def _load_device_public_key(device_key: DeviceKey) -> ed25519.Ed25519PublicKey:
     """Load an Ed25519 public key from a DeviceKey row.
 
-<<<<<<< HEAD
     Only Ed25519 / RAW (base64) is supported by register_device_key, so
     that's all we handle here.
     """
@@ -210,52 +208,8 @@ def _verify_ed25519(public_key: ed25519.Ed25519PublicKey,
         return True
     except InvalidSignature:
         return False
-    active_key = getattr(device, "active_key", None)
-
-    if active_key is not None:
-
-        raw = getattr(active_key, "public_key_bytes", None)
-
-        if raw:
-
-            return ec.EllipticCurvePublicKey.from_encoded_point(
-                ec.SECP256R1(),
-                raw
-            )
-
-    pem = getattr(device, "public_key", None)
-
-    if pem:
-
-        if isinstance(pem, str):
-            pem = pem.encode("utf-8")
-
-        public_key = serialization.load_pem_public_key(pem)
-
-        if isinstance(public_key, ec.EllipticCurvePublicKey):
-            return public_key
-
-        raise ValueError("unsupported_public_key_type")
-
-    raise ValueError("device_public_key_missing")
-
-    def _verify_signature(public_key, message: bytes, signature: bytes) -> bool:
-
-        try:
-
-            public_key.verify(
-                signature,
-                message,
-                ec.ECDSA(hashes.SHA256())
-            )
-
-            return True
-
-        except InvalidSignature:
-            return False
-
-        except Exception:
-            return False
+    except Exception:
+        return False
 
 
 # ============================================================

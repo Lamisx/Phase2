@@ -1,23 +1,28 @@
 # ممتاز ✅
 from django.urls import path
 from .views import (
-    health_check,
-    start_registration,
     complete_registration,
+    create_delegation,
+    health_check,
+    list_delegations,
     login,
-    create_delegate,
-    list_delegates,
-    delete_delegate,
+    me,
+    revoke_delegation,
+    start_registration,
+    verify_identity,
 )
 
 app_name = "account"
 
+
 urlpatterns = [
-    path("health/", health_check, name="health-check"),
-    path("auth/register/start/", start_registration, name="register-start"),
-    path("auth/register/complete/", complete_registration, name="register-complete"),
+    path("health/", health_check, name="health"),
+    path("auth/register/start/",           start_registration,    name="register-start"),
+    path("auth/register/verify-identity/", verify_identity,       name="register-verify-identity"),
+    path("auth/register/complete/",        complete_registration, name="register-complete"),
     path("auth/login/", login, name="login"),
-    path("delegations/", list_delegates, name="delegation-list"),
-    path("delegations/create/", create_delegate, name="delegation-create"),
-    path("delegations/<uuid:delegate_id>/revoke/", delete_delegate, name="delegation-revoke"),
+    path("me/", me, name="me"),
+    path("delegations/",                                  list_delegations,  name="delegation-list"),
+    path("delegations/create/",                           create_delegation, name="delegation-create"),
+    path("delegations/<uuid:delegation_id>/revoke/",      revoke_delegation, name="delegation-revoke"),
 ]

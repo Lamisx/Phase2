@@ -4,7 +4,6 @@ import hashlib
 import hmac
 import secrets
 from typing import Optional, Union
-
 from cryptography.exceptions import InvalidSignature
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -15,7 +14,6 @@ from django.conf import settings
 # Internal
 # ============================================================
 def _require_setting(name: str) -> str:
-    """Return a non-empty Django setting or raise."""
     value = getattr(settings, name, None)
     if value is None or value == "":
         raise RuntimeError(f"Required setting '{name}' is not configured")
@@ -29,57 +27,51 @@ def _to_bytes(value: Union[str, bytes]) -> bytes:
 # HMAC hashing (with peppers)
 # ============================================================
 def _hmac_sha256_hex(key: str, message: str) -> str:
-    """Return hex HMAC-SHA256(key, message)."""
     return hmac.new(
         key.encode("utf-8"),
         message.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
 
-
 def hash_api_key(api_key: str) -> str:
-    """HMAC-SHA256 of an API key, peppered with API_KEY_PEPPER."""
     pepper = _require_setting("API_KEY_PEPPER")
     return _hmac_sha256_hex(pepper, api_key)
 
-
-def hash_national_id(national_id: str) -> str:
-    """HMAC-SHA256 of a national ID, peppered with NATIONAL_ID_PEPPER."""
+# ============================================================
+# National ID — two-layer hashing
+# ============================================================
+def hash_national_id_layer1(national_id: str) -> str:
+    return hashlib.sha256(_to_bytes(national_id)).hexdigest()
+ 
+ 
+def hash_national_id_storage(shared_hash_hex: str) -> str:
     pepper = _require_setting("NATIONAL_ID_PEPPER")
-    return _hmac_sha256_hex(pepper, national_id)
-
+    return _hmac_sha256_hex(pepper, shared_hash_hex)
+ 
+def hash_national_id(national_id: str) -> str:
+    return hash_national_id_storage(hash_national_id_layer1(national_id))
 
 # ============================================================
 # Plain digests & constant-time compare
 # ============================================================
 def sha256_hex(data: Union[str, bytes]) -> str:
-    """Hex SHA-256 of arbitrary data (no pepper)."""
     return hashlib.sha256(_to_bytes(data)).hexdigest()
 
 
 def constant_time_equals(a: str, b: str) -> bool:
-    """Compare two strings without timing leaks."""
     return secrets.compare_digest(a or "", b or "")
-
 
 # ============================================================
 # Random tokens & API keys
 # ============================================================
 def generate_token(num_bytes: int = 32) -> str:
-    """URL-safe random token (base64-ish)."""
     return secrets.token_urlsafe(num_bytes)
 
-
 def generate_random_bytes(num_bytes: int = 32) -> bytes:
-    """Cryptographically secure random bytes."""
     return secrets.token_bytes(num_bytes)
 
 
 def generate_api_key(prefix: str = "ak_") -> str:
-    """Generate a new API key with a recognizable prefix.
-
-    Default prefix 'ak_' (api key). Use 'org_' for primary organization keys.
-    """
     return f"{prefix}{secrets.token_urlsafe(40)}"
 
 
@@ -87,7 +79,6 @@ def generate_api_key(prefix: str = "ak_") -> str:
 # Symmetric encryption (Fernet)
 # ============================================================
 def _get_fernet() -> Fernet:
-    """Build a Fernet instance from PAYLOAD_ENCRYPTION_KEY."""
     key = _require_setting("PAYLOAD_ENCRYPTION_KEY")
     if isinstance(key, str):
         key = key.encode("utf-8")
@@ -95,14 +86,12 @@ def _get_fernet() -> Fernet:
 
 
 def encrypt_text(plaintext: Optional[str]) -> Optional[str]:
-    """Encrypt text → base64-urlsafe ciphertext. None passes through."""
     if plaintext is None:
         return None
     return _get_fernet().encrypt(plaintext.encode("utf-8")).decode("utf-8")
 
 
 def decrypt_text(ciphertext: Optional[str]) -> Optional[str]:
-    """Decrypt text. Returns None on empty input or invalid token."""
     if not ciphertext:
         return None
     try:
@@ -126,7 +115,6 @@ def _b64decode_strict(value: str) -> bytes:
 
 
 def load_ed25519_public_key_b64(public_key_b64: str) -> ed25519.Ed25519PublicKey:
-    """Decode a base64 string to an Ed25519 public key. Raises if malformed."""
     raw = _b64decode_strict(public_key_b64)
     if len(raw) != 32:
         raise SignatureMalformedError("invalid_ed25519_public_key_length")
