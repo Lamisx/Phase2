@@ -15,7 +15,13 @@ from datetime import timedelta
 from typing import Optional, Tuple
 
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from cryptography.hazmat.primitives import hashes
+
+from cryptography.hazmat.primitives.serialization import (
+    load_der_public_key,
+)
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
@@ -181,34 +187,87 @@ class TrustEngine:
 # ============================================================
 # Cryptography helpers (Ed25519 + base64)
 # ============================================================
-def _load_device_public_key(device_key: DeviceKey) -> ed25519.Ed25519PublicKey:
-    """Load an Ed25519 public key from a DeviceKey row.
+# ============================================================
+# Cryptography helpers (ES256 / ECDSA)
+# ============================================================
 
-    Only Ed25519 / RAW (base64) is supported by register_device_key, so
-    that's all we handle here.
+def _load_device_public_key(
+    device_key: DeviceKey,
+):
     """
-    if device_key.algorithm != "Ed25519" or device_key.key_format != "RAW":
-        raise ValueError("unsupported_key_format")
+    Load ES256 public key from DeviceKey.
+    """
+
+    if (
+        device_key.algorithm != "ES256"
+        or device_key.key_format != "RAW"
+    ):
+
+        raise ValueError(
+            "unsupported_key_format"
+        )
 
     try:
-        raw = base64.b64decode((device_key.public_key or "").strip(), validate=True)
+
+        der_bytes = base64.b64decode(
+            (device_key.public_key or "").strip(),
+            validate=True,
+        )
+
     except Exception as exc:
-        raise ValueError("invalid_public_key_encoding") from exc
 
-    if len(raw) != 32:
-        raise ValueError("invalid_ed25519_public_key_length")
+        raise ValueError(
+            "invalid_public_key_encoding"
+        ) from exc
 
-    return ed25519.Ed25519PublicKey.from_public_bytes(raw)
-
-
-def _verify_ed25519(public_key: ed25519.Ed25519PublicKey,
-                    message: bytes, signature: bytes) -> bool:
     try:
-        public_key.verify(signature, message)
+
+        public_key = load_der_public_key(
+            der_bytes
+        )
+
+    except Exception as exc:
+
+        raise ValueError(
+            "invalid_public_key"
+        ) from exc
+
+    if not isinstance(
+        public_key,
+        ec.EllipticCurvePublicKey,
+    ):
+
+        raise ValueError(
+            "invalid_es256_public_key"
+        )
+
+    return public_key
+
+
+def _verify_es256(
+    public_key,
+    message: bytes,
+    signature: bytes,
+) -> bool:
+
+    try:
+
+        public_key.verify(
+            signature,
+            message,
+            ec.ECDSA(
+                hashes.SHA256()
+            ),
+        )
+
         return True
+
     except InvalidSignature:
+
         return False
+
     except Exception:
+
         return False
 
 
@@ -378,7 +437,7 @@ class VerificationService:
 
         # 7) Verify signature over challenge bytes
         message = bytes.fromhex(challenge.challenge_bytes)
-        if not _verify_ed25519(public_key, message, signature_bytes):
+        if not _verify_es256(public_key, message, signature_bytes):
             write_key_usage(
                 organization_id=session.organization_id,
                 device_id=device.id,
