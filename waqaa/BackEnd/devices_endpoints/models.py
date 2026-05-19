@@ -154,7 +154,7 @@ class DeviceKey(models.Model):
         ("COSE", "COSE"),
         ("JWK", "JWK"),
         ("PEM", "PEM"),
-        ("RAW", "RAW"),
+        ("X509", "X509"),
     ]
 
     id = models.UUIDField(
