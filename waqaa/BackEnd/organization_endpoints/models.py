@@ -130,7 +130,7 @@ class OrganizationApiKey(models.Model):
         db_table = "organization_api_keys"
         indexes = [
             models.Index(fields=["organization", "is_active"]),
-            models.Index(fields=["key_hash"])
+            models.Index(fields=["key_hash"]),
         ]
         constraints = [
             models.CheckConstraint(
