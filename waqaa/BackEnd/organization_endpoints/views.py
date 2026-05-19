@@ -90,7 +90,11 @@ class LinkUserView(APIView):
             link = OrganizationUser.objects.create(
                 organization=request.organization,
                 user=account,
-                linked_by=request.api_key.created_by,
+                linked_by=(
+                    request.api_key.created_by
+                    if request.api_key.created_by
+                    else None
+                ),
                 external_provider=data["external_provider"],
                 external_user_ref=data["external_user_ref"],
                 role=data["role"],

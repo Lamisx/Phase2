@@ -112,8 +112,8 @@ def register_device_key(request):
         device_id=data["device_id"],
         organization_id=data["organization_id"],
         public_key=data["public_key"],
-        algorithm=data["algorithm"],
-        key_format=data["key_format"],
+        algorithm="ES256",
+        key_format="RAW",
         key_purpose=data["key_purpose"],
     )
 

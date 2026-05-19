@@ -73,7 +73,7 @@ class LinkUserSerializer(serializers.Serializer):
     """
  
     user_id = serializers.UUIDField()
-    external_user_ref = serializers.CharField(max_length=255)
+    external_user_ref = serializers.CharField(max_length=255,trim_whitespace=True,)
     external_provider = serializers.ChoiceField(
         choices=[c[0] for c in OrganizationUser.PROVIDER_CHOICES],
         default=OrganizationUser.PROVIDER_INTERNAL,
@@ -82,3 +82,14 @@ class LinkUserSerializer(serializers.Serializer):
         choices=[c[0] for c in OrganizationUser.ROLE_CHOICES],
         default=OrganizationUser.ROLE_MEMBER,
     )
+
+    def validate_external_user_ref(self, value):
+
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "External user ref is required."
+            )
+
+        return value

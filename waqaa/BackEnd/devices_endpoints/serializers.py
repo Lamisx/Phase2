@@ -46,6 +46,7 @@ class DeviceSerializer(serializers.ModelSerializer):
             "platform",
             "app_instance_id",
             "is_primary_device",
+            "is_trusted",
             "is_active",
             "created_at",
             "updated_at",
@@ -93,13 +94,13 @@ class RegisterDeviceKeySerializer(serializers.Serializer):
     device_id = serializers.UUIDField()
     organization_id = serializers.UUIDField()
     public_key = serializers.CharField()
-    algorithm = serializers.ChoiceField(choices=["Ed25519"])
-    key_format = serializers.ChoiceField(choices=["RAW"])
+    #algorithm = serializers.ChoiceField(choices=["ES256"])
+    #key_format = serializers.ChoiceField(choices=["RAW"])
     key_purpose = serializers.ChoiceField(choices=["auth", "approval"])
 
     def validate_public_key(self, value):
         value = (value or "").strip()
-        if len(value) < 20:
+        if len(value) < 40:
             raise serializers.ValidationError("Invalid public key.")
         return value
 
