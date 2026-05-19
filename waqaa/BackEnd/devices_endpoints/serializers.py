@@ -95,7 +95,7 @@ class RegisterDeviceKeySerializer(serializers.Serializer):
     organization_id = serializers.UUIDField()
     public_key = serializers.CharField()
     #algorithm = serializers.ChoiceField(choices=["ES256"])
-    #key_format = serializers.ChoiceField(choices=["RAW"])
+    #key_format = serializers.ChoiceField(choices=["X509"])
     key_purpose = serializers.ChoiceField(choices=["auth", "approval"])
 
     def validate_public_key(self, value):

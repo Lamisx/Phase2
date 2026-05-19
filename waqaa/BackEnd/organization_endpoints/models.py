@@ -134,7 +134,7 @@ class OrganizationApiKey(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                check=~Q(scopes=[]),
+                condition=~Q(scopes=[]),
                 name="orgapikey_scopes_not_empty",
             ),
             models.UniqueConstraint(

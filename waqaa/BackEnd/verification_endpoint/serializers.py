@@ -70,7 +70,15 @@ class VerifySignatureInputSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError("Signature is required.")
         try:
-            base64.b64decode(value, validate=True)
+            decoded = base64.b64decode(
+                value,
+                validate=True,
+            )
+
+            if len(decoded) < 64:
+                raise serializers.ValidationError(
+                    "Signature too short."
+                )
         except Exception:
             raise serializers.ValidationError("Invalid signature format.")
         return value
