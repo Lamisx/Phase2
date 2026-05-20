@@ -1,0 +1,332 @@
+15 endpoint في 6 مجموعات:
+
+✅ Auth      → register, login
+✅ Devices   → create, list, revoke
+✅ Keys      → register, list, revoke
+Revokes one organization-scoped key without deleting the whole device.
+✅ Delegates → add, list, delete
+✅ Sessions  → create, verify, status, cancel
+🔲 Org       → link-user, bind-device
+
+HMAC للهوية الوطنيةما نخزن القيمة الخام أبداً
+per-org keysلو انكشف مفتاح، الضرر محدود
+managed=False للـ logsسجلات لا تُحذف ولا تُعدّلc
+challenge_bytes exact  Flutter يوقع نفس النص المخزن
+select_for_update  يمنع race condition في التحقق
+
+
+
+
+POST /api/auth/register/
+
+من يستخدمه: المستخدم الجديد
+الهدف: إنشاء حساب في وقاء
+
+يرسل:
+{
+  "username": "ahmed",
+  "password": "12345678",
+  "national_id": "1234567890",
+  "display_name": "أحمد",
+  "email": "ahmed@gmail.com"
+}
+
+يرجع:
+{
+  "message": "User registered successfully",
+  "user": { "id": "uuid", "username": "ahmed" }
+}
+
+اللي يصير داخلياً:
+- password → make_password() → يُخزن مشفر
+- national_id → HMAC-SHA256 → يُخزن هاش فقط
+- القيمة الخام ما تلمس DB أبداً
+
+
+
+
+POST /api/auth/login/
+من يستخدمه: المستخدم الموجود
+الهدف: التحقق من الهوية
+
+يرسل:
+{
+  "username": "ahmed",
+  "password": "12345678"
+}
+
+يرجع:
+{
+  "message": "Login successful",
+  "user": { "id": "uuid", "username": "ahmed" }
+}
+
+اللي يصير داخلياً:
+- يجيب المستخدم من DB
+- check_password() يقارن الهاش
+
+2)Devices
+POST /api/devices/create/
+
+من يستخدمه: Flutter بعد login
+الهدف: تسجيل الجهاز في وقاء
+
+يرسل:
+{
+  "user_id": "uuid",
+  "platform": "android",
+  "label": "iPhone أحمد",
+  "app_instance_id": "app_123"
+}
+
+يرجع:
+{
+  "message": "Device created successfully",
+  "device_id": "uuid"
+}
+
+GET /api/devices/<user_id>/
+
+من يستخدمه: Flutter أو Dashboard
+الهدف: قائمة أجهزة المستخدم
+
+يرجع:
+{
+  "count": 2,
+  "devices": [
+    { "id": "uuid", "platform": "android", "is_active": true },
+    { "id": "uuid", "platform": "ios",     "is_active": true }
+  ]
+}
+
+POST /api/devices/<device_id>/revoke/
+من يستخدمه: المستخدم لو ضاع جهازه
+الهدف: حجب الجهاز فوراً
+
+اللي يصير داخلياً:
+- device.is_active = false
+- كل مفاتيح الجهاز → is_active = false
+- يسجل في device_revocation_log
+
+النتيجة:
+- الجهاز محجوب عبر كل المنظمات فوراً
+
+
+
+
+3) Device Keys
+POST /api/devices/<device_id>/keys/
+من يستخدمه: Flutter بعد توليد المفتاح
+الهدف: تسجيل المفتاح العام في وقاء
+
+يرسل:
+{
+  "organization_id": "uuid",
+  "public_key": "base64...",
+  "algorithm": "Ed25519",
+  "key_format": "RAW",
+  "key_purpose": "auth"
+}
+
+يرجع:
+{
+  "message": "DEVICE_KEY_REGISTERED",
+  "device_key_id": "uuid"
+}
+
+مهم جداً:
+- المفتاح الخاص ما يُرسل أبداً ← يبقى في الجهاز
+- فقط المفتاح العام يُخزن في DB
+
+GET /api/devices/<device_id>/keys/
+الهدف: قائمة مفاتيح الجهاز
+
+يرجع:
+{
+  "count": 1,
+  "keys": [
+    {
+      "id": "uuid",
+      "organization": "uuid",
+      "algorithm": "Ed25519",
+      "is_active": true
+    }
+  ]
+}
+
+4) Delegates
+POST /api/delegates/create/
+
+من يستخدمه: أحمد يفوّض خالد
+الهدف: السماح لشخص آخر يستقبل OTP بدله
+
+يرسل:
+{
+  "primary_user_id": "uuid أحمد",
+  "delegate_user_id": "uuid خالد",
+  "added_via": "qr"
+}
+
+الشروط:
+- كلاهما مسجل في وقاء
+- ما تقدر تفوّض نفسك
+- ما يوجد تفويض مكرر
+
+GET /api/delegates/?primary_user_id=uuid
+الهدف: قائمة المفوَّضين
+
+يرجع:
+{
+  "count": 1,
+  "delegates": [
+    {
+      "id": "uuid",
+      "delegate_username": "khalid",
+      "added_via": "qr",
+      "status": "active"
+    }
+  ]
+}
+
+
+DELETE /api/delegates/<delegate_id>/
+الهدف: إلغاء التفويض
+
+اللي يصير:
+- status = "revoked"
+- revoked_at = now()
+- خالد ما يقدر يستقبل OTP بعدها
+
+
+
+
+5) Sessions
+POST /api/sessions/
+
+من يستخدمه: المنظمة (البنك)
+الهدف: بدء عملية تحقق
+
+يرسل:
+{
+  "organization_api_key": "key...",
+  "external_user_ref": "user123",
+  "org_operation_ref": "TXN-456",
+  "operation_type": "transfer"
+}
+
+اللي يصير داخلياً:
+1. يتحقق من الـ API key
+2. يجيب المستخدم من organization_users
+3. ينشئ session
+4. ينشئ challenge
+
+يرجع:
+{
+  "session_id": "uuid",
+  "challenge_id": "uuid",      ← Flutter يحتاجه
+  "challenge_bytes": "...",    ← Flutter يوقعه
+  "status": "challenge_issued"
+}
+
+POST /api/sessions/
+من يستخدمه: Flutter
+الهدف: إرسال التوقيع للتحقق
+
+يرسل:
+{
+  "challenge_id": "uuid",
+  "device_id": "uuid",
+  "signature": "base64..."
+}
+
+اللي يصير داخلياً:
+1. تحقق من الجلسة ما انتهت
+2. تحقق من التحدي ما استُخدم
+3. تحقق من الجهاز نشط
+4. primary أو delegate؟
+5. جيب المفتاح العام
+6. verify_ed25519_signature()
+7. سجّل النتيجة
+
+يرجع:
+{ "status": "verified" } ✅
+أو
+{ "error": "INVALID_SIGNATURE" } ❌
+
+
+
+GET /api/sessions/<session_id>/
+من يستخدمه: المنظمة تسأل عن النتيجة
+الهدف: معرفة حالة الجلسة
+
+يرجع:
+{
+  "session_id": "uuid",
+  "status": "verified",
+  "verified_at": "2024-...",
+  "operation_type": "transfer"
+}
+
+
+
+POST /api/sessions/<session_id>/cancel/
+
+من يستخدمه: المنظمة أو المستخدم
+الهدف: إلغاء الجلسة
+
+الشروط:
+- ما تلغي جلسة verified أو failed أو expired
+
+اللي يصير:
+- كل التحديات النشطة تُلغى
+- status = "cancelled"
+
+
+
+6) Org (باقي 🔲)
+POST /api/org/link-user/
+الهدف: ربط مستخدم وقاء بمستخدم المنظمة
+
+يرسل:
+{
+  "organization_api_key": "...",
+  "user_id": "uuid",
+  "external_user_ref": "user123"
+}
+
+POST /api/org/bind-device/
+الهدف: ربط جهاز بمنظمة معينة
+
+يرسل:
+{
+  "organization_api_key": "...",
+  "device_id": "uuid",
+  "user_id": "uuid"
+}
+
+
+
+
+
+///////////////////////  link for accounts_endpoints:
+
+# Auth
+http://127.0.0.1:8000/api/accounts/health/
+http://127.0.0.1:8000/api/accounts/register/
+http://127.0.0.1:8000/api/accounts/login/
+
+# Delegates
+http://127.0.0.1:8000/api/accounts/delegates/
+http://127.0.0.1:8000/api/accounts/delegates/create/
+http://127.0.0.1:8000/api/accounts/delegates/<id>/delete/
+
+# Devices
+http://127.0.0.1:8000/api/devices/create/
+http://127.0.0.1:8000/api/devices/user/<user_id>/
+http://127.0.0.1:8000/api/devices/<device_id>/revoke/
+http://127.0.0.1:8000/api/devices/keys/register/
+
+# Sessions
+http://127.0.0.1:8000/api/verification/sessions/create/
+http://127.0.0.1:8000/api/verification/sessions/<id>/verify/
+http://127.0.0.1:8000/api/verification/sessions/<id>/status/

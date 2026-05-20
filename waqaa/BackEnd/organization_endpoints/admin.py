@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Organization, OrganizationApiKey, OrganizationUser , AuditLog
+from .models import Organization, OrganizationApiKey, OrganizationUser 
 
 
 @admin.register(Organization)

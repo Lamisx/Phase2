@@ -1,73 +1,69 @@
-import base64
-from django.db import IntegrityError
+"""
+Verification endpoints.
+
+Authentication model:
+    Organization-facing endpoints  → X-API-Key header (organization_endpoints
+                                     OrganizationAPIKeyAuthentication).
+    Device-facing /verify/         → no auth header; the device proves itself
+                                     by signing the challenge with its private
+                                     key. The signature replaces a token.
+"""
 from django.shortcuts import get_object_or_404
-from rest_framework import status, generics, permissions, serializers as drf_serializers
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from rest_framework import generics, permissions, status
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.throttling import ScopedRateThrottle
-from organization_endpoints.models import OrganizationUser
-from organization_endpoints.authentication import (
-    OrganizationAPIKeyAuthentication
-)
-from .models import (
-    VerificationSession,
-    AuditLog,
-    KeyUsageLog,
-)
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from core.utils import get_client_ip, get_user_agent
+from organization_endpoints.authentication import OrganizationAPIKeyAuthentication
+from organization_endpoints.models import OrganizationApiKey, OrganizationUser
+from organization_endpoints.permissions import HasOrganizationAPIKey, HasScope
+
+from .models import AuditLog, KeyUsageLog, VerificationSession
 from .serializers import (
-    CreateSessionSerializer,
+    AuditLogSerializer,
+    CreateSessionInputSerializer,
+    KeyUsageLogSerializer,
     SessionStatusSerializer,
     VerificationChallengeSerializer,
-    AuditLogSerializer,
-    KeyUsageLogSerializer,
+    VerifySignatureInputSerializer,
 )
-from . import services
+from .services import VerificationService, write_audit
+
 
 # ============================================================
-# Permissions & pagination
+# Pagination
 # ============================================================
-class IsOrganizationRequest(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return getattr(request, "organization", None) is not None
 class DefaultPagination(PageNumberPagination):
     page_size = 25
     page_size_query_param = "page_size"
     max_page_size = 100
 
-class OrgScopedThrottle(ScopedRateThrottle):
-    """Per-organization throttling (auth'd requests)."""
-    def get_cache_key(self, request, view):
-        org = getattr(request, "organization", None)
-        if org is None:
-            return None
-        return self.cache_format % {
-            "scope": self.scope,
-            "ident": str(org.id),
-        }
 
 # ============================================================
 # 1. Create Session + Issue Challenge
 #    POST /api/verification/sessions/create/
 # ============================================================
 class CreateSessionAndChallengeView(APIView):
+    """Organization creates a verification session for one of its users.
+
+    Requires scope: session:create.
+    """
 
     authentication_classes = [OrganizationAPIKeyAuthentication]
-    permission_classes = [IsOrganizationRequest]
-    throttle_classes = [OrgScopedThrottle]
-    throttle_scope = "verify_create"
+    permission_classes = [HasOrganizationAPIKey, HasScope]
+    required_scope = OrganizationApiKey.SCOPE_SESSION_CREATE
+
     def post(self, request):
-        # device_id is optional at this stage; the device identifies itself at /verify/.
-        class _Input(CreateSessionSerializer):
-            device_id = drf_serializers.UUIDField(
-                required=False, write_only=True, allow_null=True
-            )
-        serializer = _Input(data=request.data)
+        serializer = CreateSessionInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+
         organization = request.organization
-        client_ip = services.get_client_ip(request)
-        user_agent = services.get_user_agent(request)
+        client_ip = get_client_ip(request)
+        user_agent = get_user_agent(request)
+
+        # Resolve the org-side user reference to one of our AccountUsers.
         org_user = (
             OrganizationUser.objects
             .select_related("user")
@@ -78,7 +74,7 @@ class CreateSessionAndChallengeView(APIView):
             .first()
         )
         if org_user is None:
-            services.write_audit(
+            write_audit(
                 organization_id=organization.id,
                 actor_type=AuditLog.ActorType.ORG,
                 actor_id=organization.id,
@@ -95,17 +91,23 @@ class CreateSessionAndChallengeView(APIView):
                 {"detail": "User reference not found for this organization."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # Create session + first challenge (atomic).
         try:
-            session, challenge = services.create_session_and_issue_challenge(
+            session, challenge = VerificationService.create_session_and_issue_challenge(
                 organization=organization,
                 org_user=org_user,
                 org_operation_ref=data["org_operation_ref"],
                 operation_type=data["operation_type"],
+                operation_hash=data.get("operation_hash") or None,
+                operation_payload_encrypted=data.get("operation_payload_encrypted") or None,
                 client_ip=client_ip,
                 user_agent=user_agent,
             )
-        except IntegrityError:
-            services.write_audit(
+        except Exception as exc:
+            # The most common cause is the unique constraint on
+            # (organization, org_operation_ref). We surface this as 409.
+            write_audit(
                 organization_id=organization.id,
                 actor_type=AuditLog.ActorType.ORG,
                 actor_id=organization.id,
@@ -114,7 +116,8 @@ class CreateSessionAndChallengeView(APIView):
                 ip_address=client_ip,
                 user_agent=user_agent,
                 metadata={
-                    "reason": "duplicate_org_operation_ref",
+                    "reason": "session_create_failed",
+                    "error": str(exc)[:200],
                     "org_operation_ref": data["org_operation_ref"],
                 },
             )
@@ -122,7 +125,8 @@ class CreateSessionAndChallengeView(APIView):
                 {"detail": "A session with this operation reference already exists."},
                 status=status.HTTP_409_CONFLICT,
             )
-        services.write_audit(
+
+        write_audit(
             organization_id=organization.id,
             session_id=session.id,
             actor_type=AuditLog.ActorType.ORG,
@@ -136,6 +140,7 @@ class CreateSessionAndChallengeView(APIView):
                 "challenge_id": str(challenge.id),
             },
         )
+
         return Response(
             {
                 "session_id": str(session.id),
@@ -146,45 +151,38 @@ class CreateSessionAndChallengeView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
 # ============================================================
 # 2. Verify Device Signature
 #    POST /api/verification/sessions/<id>/verify/
 # ============================================================
 class VerifyDeviceSignatureView(APIView):
+    """Device-side endpoint — the device signs the challenge and posts it.
+
+    No auth header: the cryptographic signature IS the authentication.
+    """
+
     authentication_classes = []
     permission_classes = [permissions.AllowAny]
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "verify_signature"
-    class _Input(drf_serializers.Serializer):
-        device_id = drf_serializers.UUIDField()
-        signature = drf_serializers.CharField(max_length=4096, trim_whitespace=True)
 
-        def validate_signature(self, value):
-            value = value.strip()
-            if not value:
-                raise drf_serializers.ValidationError("Signature is required")
-            try:
-                base64.b64decode(value, validate=True)
-            except Exception:
-                raise drf_serializers.ValidationError("Invalid signature format")
-            return value
     def post(self, request, session_id):
-        serializer = self._Input(data=request.data)
+        serializer = VerifySignatureInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        client_ip = services.get_client_ip(request)
-        user_agent = services.get_user_agent(request)
+        client_ip = get_client_ip(request)
+        user_agent = get_user_agent(request)
 
         try:
-            session, decision_token = services.verify_signature_and_decide(
+            session, decision_token = VerificationService.verify_signature_and_decide(
                 session_id=session_id,
                 device_id=data["device_id"],
                 signature_b64=data["signature"],
             )
-        except ValueError as e:
-            reason = str(e)
-            services.write_audit(
+        except ValueError as exc:
+            reason = str(exc)
+            write_audit(
                 session_id=session_id,
                 device_id=data["device_id"],
                 actor_type=AuditLog.ActorType.USER,
@@ -195,7 +193,8 @@ class VerifyDeviceSignatureView(APIView):
                 metadata={"reason": reason},
             )
             return Response({"detail": reason}, status=status.HTTP_400_BAD_REQUEST)
-        services.write_audit(
+
+        write_audit(
             organization_id=session.organization_id,
             session_id=session.id,
             device_id=data["device_id"],
@@ -214,24 +213,27 @@ class VerifyDeviceSignatureView(APIView):
                 "actor_type": session.verified_by_actor_type,
             },
         )
+
         return Response(
             {
                 "session": SessionStatusSerializer(session).data,
                 "decision": session.status,
-                "decision_token": decision_token,  # null if denied
+                "decision_token": decision_token,  # None when denied
             },
             status=status.HTTP_200_OK,
         )
 
+
 # ============================================================
-# 3. Verify Decision Token (org confirms a token later)
+# 3. Verify Decision Token (organization callback)
 #    POST /api/verification/sessions/<id>/verify-token/
 # ============================================================
 class VerifyDecisionTokenView(APIView):
+    """Organization later confirms a decision_token it received from the device."""
+
     authentication_classes = [OrganizationAPIKeyAuthentication]
-    permission_classes = [IsOrganizationRequest]
-    throttle_classes = [OrgScopedThrottle]
-    throttle_scope = "verify_read"
+    permission_classes = [HasOrganizationAPIKey, HasScope]
+    required_scope = OrganizationApiKey.SCOPE_SESSION_READ
 
     def post(self, request, session_id):
         token = (request.data.get("decision_token") or "").strip()
@@ -240,21 +242,24 @@ class VerifyDecisionTokenView(APIView):
                 {"detail": "decision_token is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        ok = services.verify_decision_token(
+
+        ok = VerificationService.verify_decision_token(
             organization=request.organization,
             session_id=session_id,
             token=token,
         )
-        services.write_audit(
+
+        write_audit(
             organization_id=request.organization.id,
             session_id=session_id,
             actor_type=AuditLog.ActorType.ORG,
             actor_id=request.organization.id,
             action="verify_decision_token",
             result=AuditLog.Result.OK if ok else AuditLog.Result.FAIL,
-            ip_address=services.get_client_ip(request),
-            user_agent=services.get_user_agent(request),
+            ip_address=get_client_ip(request),
+            user_agent=get_user_agent(request),
         )
+
         if not ok:
             return Response(
                 {"valid": False, "detail": "Invalid or expired decision token."},
@@ -262,15 +267,15 @@ class VerifyDecisionTokenView(APIView):
             )
         return Response({"valid": True}, status=status.HTTP_200_OK)
 
+
 # ============================================================
-# 4. Session Status (poll)
+# 4. Session Status (polling)
 #    GET /api/verification/sessions/<id>/status/
 # ============================================================
 class SessionStatusView(APIView):
     authentication_classes = [OrganizationAPIKeyAuthentication]
-    permission_classes = [IsOrganizationRequest]
-    throttle_classes = [OrgScopedThrottle]
-    throttle_scope = "verify_read"
+    permission_classes = [HasOrganizationAPIKey, HasScope]
+    required_scope = OrganizationApiKey.SCOPE_SESSION_READ
 
     def get(self, request, session_id):
         session = get_object_or_404(
@@ -278,19 +283,23 @@ class SessionStatusView(APIView):
             id=session_id,
             organization=request.organization,
         )
+        # Side-effect: lazily transition to EXPIRED if past expires_at.
         session.update_expired_status()
         return Response(SessionStatusSerializer(session).data)
-    
+
+
 # ============================================================
 # 5. Cancel Session
 #    POST /api/verification/sessions/<id>/cancel/
 # ============================================================
 class CancelSessionView(APIView):
     authentication_classes = [OrganizationAPIKeyAuthentication]
-    permission_classes = [IsOrganizationRequest]
+    permission_classes = [HasOrganizationAPIKey, HasScope]
+    required_scope = OrganizationApiKey.SCOPE_SESSION_CANCEL
+
     def post(self, request, session_id):
-        client_ip = services.get_client_ip(request)
-        user_agent = services.get_user_agent(request)
+        client_ip = get_client_ip(request)
+        user_agent = get_user_agent(request)
 
         session = get_object_or_404(
             VerificationSession,
@@ -298,12 +307,13 @@ class CancelSessionView(APIView):
             organization=request.organization,
         )
 
-        if not services.cancel_session(session):
+        if not VerificationService.cancel_session(session=session):
             return Response(
                 {"detail": "Session is already in a final state."},
                 status=status.HTTP_409_CONFLICT,
             )
-        services.write_audit(
+
+        write_audit(
             organization_id=request.organization.id,
             session_id=session.id,
             actor_type=AuditLog.ActorType.ORG,
@@ -313,22 +323,25 @@ class CancelSessionView(APIView):
             ip_address=client_ip,
             user_agent=user_agent,
         )
+
         return Response(SessionStatusSerializer(session).data)
 
+
 # ============================================================
-# 6. List Sessions (org dashboard)
+# 6. List Sessions (organization dashboard)
 #    GET /api/verification/sessions/
 # ============================================================
 class ListSessionsView(generics.ListAPIView):
     authentication_classes = [OrganizationAPIKeyAuthentication]
-    permission_classes = [IsOrganizationRequest]
+    permission_classes = [HasOrganizationAPIKey, HasScope]
+    required_scope = OrganizationApiKey.SCOPE_AUDIT_READ
     serializer_class = SessionStatusSerializer
     pagination_class = DefaultPagination
 
     def get_queryset(self):
         qs = VerificationSession.objects.filter(organization=self.request.organization)
-
         params = self.request.query_params
+
         if v := params.get("status"):
             qs = qs.filter(status=v)
         if v := params.get("operation_type"):
@@ -339,15 +352,18 @@ class ListSessionsView(generics.ListAPIView):
             qs = qs.filter(created_at__gte=v)
         if v := params.get("to"):
             qs = qs.filter(created_at__lte=v)
+
         return qs.order_by("-created_at")
 
+
 # ============================================================
-# 7. List Challenges for a session (forensics)
+# 7. List Challenges of a Session (forensics)
 #    GET /api/verification/sessions/<id>/challenges/
 # ============================================================
 class ListSessionChallengesView(generics.ListAPIView):
     authentication_classes = [OrganizationAPIKeyAuthentication]
-    permission_classes = [IsOrganizationRequest]
+    permission_classes = [HasOrganizationAPIKey, HasScope]
+    required_scope = OrganizationApiKey.SCOPE_AUDIT_READ
     serializer_class = VerificationChallengeSerializer
     pagination_class = DefaultPagination
 
@@ -359,20 +375,22 @@ class ListSessionChallengesView(generics.ListAPIView):
         )
         return session.challenges.order_by("-attempt_number")
 
+
 # ============================================================
 # 8. Audit Logs
 #    GET /api/verification/audit-logs/
 # ============================================================
 class AuditLogListView(generics.ListAPIView):
     authentication_classes = [OrganizationAPIKeyAuthentication]
-    permission_classes = [IsOrganizationRequest]
+    permission_classes = [HasOrganizationAPIKey, HasScope]
+    required_scope = OrganizationApiKey.SCOPE_AUDIT_READ
     serializer_class = AuditLogSerializer
     pagination_class = DefaultPagination
 
     def get_queryset(self):
         qs = AuditLog.objects.filter(organization_id=self.request.organization.id)
-
         params = self.request.query_params
+
         if v := params.get("session_id"):
             qs = qs.filter(session_id=v)
         if v := params.get("device_id"):
@@ -390,21 +408,22 @@ class AuditLogListView(generics.ListAPIView):
 
         return qs.order_by("-created_at")
 
+
 # ============================================================
 # 9. Key Usage Logs
 #    GET /api/verification/key-usage-logs/
 # ============================================================
-
 class KeyUsageLogListView(generics.ListAPIView):
     authentication_classes = [OrganizationAPIKeyAuthentication]
-    permission_classes = [IsOrganizationRequest]
+    permission_classes = [HasOrganizationAPIKey, HasScope]
+    required_scope = OrganizationApiKey.SCOPE_AUDIT_READ
     serializer_class = KeyUsageLogSerializer
     pagination_class = DefaultPagination
 
     def get_queryset(self):
         qs = KeyUsageLog.objects.filter(organization_id=self.request.organization.id)
-
         params = self.request.query_params
+
         if v := params.get("session_id"):
             qs = qs.filter(session_id=v)
         if v := params.get("device_id"):
@@ -413,4 +432,5 @@ class KeyUsageLogListView(generics.ListAPIView):
             qs = qs.filter(action=v)
         if v := params.get("result"):
             qs = qs.filter(result=v)
+
         return qs.order_by("-created_at")

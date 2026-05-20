@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     "organization_endpoints",
     "devices_endpoints",
     "verification_endpoint",
+    "corsheaders",
 ]
 
 
@@ -103,6 +104,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
 ]
 
 
@@ -291,3 +293,8 @@ if not DEBUG:
 
     if TRUST_FORWARDED_HEADERS:
         SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+
+
+
+CORS_ALLOW_ALL_ORIGINS = True
