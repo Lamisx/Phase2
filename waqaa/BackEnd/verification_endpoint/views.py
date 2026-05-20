@@ -70,7 +70,7 @@ class CreateSessionAndChallengeView(APIView):
         user_agent = services.get_user_agent(request)
         org_user = (
             OrganizationUser.objects
-            .select_related("waqa_user")
+            .select_related("user")
             .filter(
                 organization=organization,
                 external_user_ref=data["external_user_ref"],
