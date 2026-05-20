@@ -58,8 +58,8 @@ SECRET_KEY = env(
     default="unsafe-dev-key-do-not-use-in-prod" if DEBUG else None,
     required=not DEBUG,
 )
-
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", default="127.0.0.1,localhost")
+ALLOWED_HOSTS = ["*"]
+#ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", default="127.0.0.1,localhost", default'192.168.8.53:8000,localhost')
 
 ROOT_URLCONF = "core.urls"
 WSGI_APPLICATION = "core.wsgi.application"
