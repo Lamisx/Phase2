@@ -200,7 +200,7 @@ def _load_device_public_key(
 
     if (
         device_key.algorithm != "ES256"
-        or device_key.key_format != "RAW"
+        or device_key.key_format != "X509"
     ):
 
         raise ValueError(
