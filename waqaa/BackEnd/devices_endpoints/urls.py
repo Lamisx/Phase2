@@ -19,4 +19,3 @@ urlpatterns = [
     # Access decision (quick check)
     path("access-decision/", views.access_decision, name="access-decision"),
 ]
- # ابروح لدوره المياه

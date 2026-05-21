@@ -3,6 +3,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+
+from .models import AccountUser
  
 from .serializers import (
     AccountSerializer,
@@ -65,30 +67,50 @@ def verify_identity(request):
         status=status.HTTP_200_OK,
     )
  
- 
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def complete_registration(request):
 
-    serializer = CompleteRegistrationSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    data = serializer.validated_data
- 
-    session, account = RegistrationService.complete_registration(
-        session_id=data["session_id"],
-        username=data["username"],
-        display_name=data["display_name"],
-        password=data["password"],
-        phone=data["phone"],
-        email=data.get("email"),
+    username = request.data.get("username")
+    display_name = request.data.get("display_name")
+    password = request.data.get("password")
+    phone = request.data.get("phone")
+    email = request.data.get("email")
+
+    if not username:
+        return Response(
+            {"username": ["This field may not be blank."]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not display_name:
+        return Response(
+            {"display_name": ["This field may not be blank."]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not password:
+        return Response(
+            {"password": ["This field may not be blank."]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    account = AccountUser.objects.create_user(
+        username=username,
+        display_name=display_name,
+        password=password,
+        phone=phone,
+        email=email,
     )
- 
+
     refresh = RefreshToken.for_user(account)
- 
+
     return Response(
         {
             "message": "Account created.",
+
             "user": AccountSerializer(account).data,
+
             "tokens": {
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
