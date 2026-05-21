@@ -37,6 +37,7 @@ dependencies:
     # مكتبة HTTP — تخلي Flutter يتواصل مع السيرفر ويرسل ويستقبل البيانات
   http: ^1.2.0 
   dio: ^5.9.2
+  flutter_secure_storage: ^10.2.0
 
 dev_dependencies:
   flutter_test:

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-
-import 'services/security_service.dart';
-import 'services/device_service.dart';
+import 'services/auth_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -19,29 +17,11 @@ class MyApp extends StatelessWidget {
         body: Center(
           child: ElevatedButton(
             onPressed: () async {
-              print("BUTTON CLICKED");
+              await AuthService.login(
+                username: "rawan2",
 
-              try {
-                final publicKey = await SecurityService.generateKeyPair();
-
-                print("PUBLIC KEY:");
-
-                print(publicKey);
-
-                print("CALLING REGISTER");
-
-                await DeviceService.registerDeviceKey(
-                  deviceId: "550e8400-e29b-41d4-a716-446655440009",
-
-                  organizationId: "550e8400-e29b-41d4-a716-446655440000",
-
-                  publicKey: publicKey,
-                );
-              } catch (e) {
-                print("ERROR:");
-
-                print(e);
-              }
+                password: "12345678Aa",
+              );
             },
 
             child: const Text("Generate KeyPair"),

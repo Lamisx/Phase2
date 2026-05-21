@@ -12,7 +12,7 @@ class DeviceService {
       print("START REGISTER");
 
       final response = await ApiService.dio.post(
-        "api/device/test/",
+        "api/device/keys/register-device-key/",
         data: {
           "device_id": deviceId,
 
