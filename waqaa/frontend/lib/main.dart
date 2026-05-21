@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'services/auth_service.dart';
+
+import 'screens/login_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -10,24 +11,10 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(title: const Text("Waqaa")),
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
 
-        body: Center(
-          child: ElevatedButton(
-            onPressed: () async {
-              await AuthService.login(
-                username: "rawan2",
-
-                password: "12345678Aa",
-              );
-            },
-
-            child: const Text("Generate KeyPair"),
-          ),
-        ),
-      ),
+      home: LoginScreen(),
     );
   }
 }
