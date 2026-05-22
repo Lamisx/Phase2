@@ -38,6 +38,8 @@ dependencies:
   http: ^1.2.0 
   dio: ^5.9.2
   flutter_secure_storage: ^10.2.0
+  cryptography: ^2.7.0
+  device_info_plus: ^11.1.0
 
 dev_dependencies:
   flutter_test:

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../widgets/shared_widgets.dart';
 import '../services/api_service.dart';
+import '../services/device_service.dart';
+import '../services/crypto_service.dart';
 
 class ContactScreen extends StatefulWidget {
   final GlobalKey<FormState> formKey;
@@ -171,6 +173,13 @@ class _ContactScreenState extends State<ContactScreen> {
                               const Center(child: CircularProgressIndicator()),
                         );
 
+                        print("\n📝 === REGISTRATION COMPLETE ===");
+
+                        // =====================================================================
+                        // STEP 1: CREATE ACCOUNT
+                        // =====================================================================
+                        print("1️⃣ Creating account...");
+
                         bool created = await ApiService.completeRegistration(
                           username: widget.usernameController.text,
 
@@ -181,25 +190,72 @@ class _ContactScreenState extends State<ContactScreen> {
                           email: widget.emailController.text,
                         );
 
-                        Navigator.pop(context);
-
-                        if (created) {
-                          widget.onSubmit();
-                        } else {
-                          throw Exception("Registration failed");
+                        if (!created) {
+                          throw Exception("Account creation failed");
                         }
-                      } catch (e) {
+
+                        print("✅ Account created successfully");
+
+                        // =====================================================================
+                        // STEP 2: CREATE DEVICE (happens after account creation)
+                        // =====================================================================
+                        print("2️⃣ Creating device...");
+
+                        final deviceId = await DeviceService.createDevice();
+
+                        if (deviceId == null) {
+                          throw Exception("Device creation failed");
+                        }
+
+                        print("✅ Device created: $deviceId");
+
+                        // =====================================================================
+                        // STEP 3: GENERATE KEYS (happens DURING REGISTRATION)
+                        // =====================================================================
+                        print("3️⃣ Generating cryptographic keys...");
+
+                        final keys = await CryptoService.generateKeyPair();
+
+                        if (keys == null || keys["publicKey"] == null) {
+                          throw Exception("Key generation failed");
+                        }
+
+                        print("✅ Keys generated");
+
+                        // =====================================================================
+                        // STEP 4: REGISTER PUBLIC KEY
+                        // =====================================================================
+                        print("4️⃣ Registering public key...");
+
+                        await DeviceService.registerDeviceKey(
+                          deviceId: deviceId,
+
+                          publicKey: keys["publicKey"]!,
+                        );
+
+                        print("✅ Public key registered");
+
+                        print(
+                          "📝 === REGISTRATION COMPLETE - DEVICE READY ===\n",
+                        );
+
+                        if (!mounted) return;
+
                         Navigator.pop(context);
 
-                        print(e);
+                        widget.onSubmit();
+                      } catch (e) {
+                        if (mounted) Navigator.pop(context);
+
+                        print("❌ Registration Error: $e");
 
                         showDialog(
                           context: context,
 
-                          builder: (_) => const AlertDialog(
-                            title: Text("خطأ"),
+                          builder: (_) => AlertDialog(
+                            title: const Text("خطأ"),
 
-                            content: Text("حدث خطأ أثناء إنشاء الحساب"),
+                            content: Text("حدث خطأ أثناء إنشاء الحساب: $e"),
                           ),
                         );
                       }

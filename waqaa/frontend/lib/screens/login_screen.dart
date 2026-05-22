@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'trusted_device.dart';
 
 import '../services/api_service.dart';
+
 import 'registration_flow.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -107,6 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       style: TextStyle(
                         color: Color.fromARGB(255, 174, 204, 221),
+
                         fontSize: 14,
                       ),
                     ),
@@ -135,15 +137,31 @@ class _LoginScreenState extends State<LoginScreen> {
                         }
 
                         try {
+                          // =====================================================================
+                          // STEP 1: AUTHENTICATE USER
+                          // =====================================================================
+                          print("\n🔐 === LOGIN ===");
+                          print("Authenticating user: ${idController.text}");
+
                           await ApiService.login(
                             username: idController.text,
 
                             password: passwordController.text,
                           );
 
-                          if (!mounted) {
-                            return;
-                          }
+                          print("✅ Authentication successful");
+                          print("✅ Token saved");
+                          print(
+                            "✅ Device and keys already exist from registration\n",
+                          );
+
+                          // =====================================================================
+                          // NO DEVICE CREATION OR KEY GENERATION HERE!
+                          // That already happened during registration.
+                          // We just authenticated and now navigate.
+                          // =====================================================================
+
+                          if (!mounted) return;
 
                           Navigator.pushReplacement(
                             context,
@@ -153,8 +171,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           );
                         } catch (e) {
+                          print("❌ Login Error: $e\n");
+
+                          if (!mounted) return;
+
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Login Failed: $e")),
+                            SnackBar(
+                              content: Text("Login Failed: $e"),
+                              backgroundColor: Colors.red,
+                              duration: const Duration(seconds: 4),
+                            ),
                           );
                         }
                       },
@@ -203,6 +229,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                           style: TextStyle(
                             color: Color(0xFF8DB3B3),
+
                             decoration: TextDecoration.underline,
                           ),
                         ),
@@ -224,6 +251,10 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // =========================================
+  // LABEL
+  // =========================================
+
   Widget _buildLabel(String text) {
     return Text(
       text,
@@ -235,6 +266,10 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
+  // =========================================
+  // TEXT FIELD
+  // =========================================
 
   Widget _buildTextField({
     required TextEditingController controller,
@@ -298,6 +333,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+// =============================================
+// TOP WAVE PAINTER
+// =============================================
+
 class TopWavePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -314,8 +353,10 @@ class TopWavePainter extends CustomPainter {
     path1.cubicTo(
       size.width * 0.3,
       size.height * 1.1,
+
       size.width * 0.7,
       size.height * 0.5,
+
       size.width * 0.9,
       3,
     );
@@ -335,8 +376,10 @@ class TopWavePainter extends CustomPainter {
     path2.cubicTo(
       size.width * 0.2,
       size.height * 0.85,
+
       size.width * 0.4,
       size.height * 0.4,
+
       size.width * 0.7,
       0,
     );
