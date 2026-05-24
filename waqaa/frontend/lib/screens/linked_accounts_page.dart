@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 class LinkedAccountsPage extends StatelessWidget {
   const LinkedAccountsPage({super.key});
 
+  @override
   Widget build(BuildContext context) {
     const bg = Color(0xFF2B3C44);
     const divider = Color(0xFF3A4E57);

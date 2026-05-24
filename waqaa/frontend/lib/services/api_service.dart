@@ -152,6 +152,10 @@ class ApiService {
   // =====================================================
 
   static Future<bool> completeRegistration({
+    required String sessionId,
+
+    required String nationalId,
+
     required String username,
 
     required String password,
@@ -165,6 +169,9 @@ class ApiService {
         "api/account/auth/register/complete/",
 
         data: {
+          "session_id": sessionId,
+          "national_id": nationalId,
+
           "username": username,
 
           "display_name": username,
@@ -194,6 +201,8 @@ class ApiService {
 
       return response.statusCode == 201;
     } catch (e) {
+      print("❌ COMPLETE REGISTRATION ERROR");
+
       if (e is DioException) {
         print("STATUS CODE:");
         print(e.response?.statusCode);

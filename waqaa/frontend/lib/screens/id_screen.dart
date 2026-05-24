@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../widgets/shared_widgets.dart';
+import '../services/api_service.dart';
 
 class IdScreen extends StatefulWidget {
   final GlobalKey<FormState> formKey;
 
   final TextEditingController idController;
 
-  final VoidCallback onNext;
+  // ✅ CHANGED
+  final Function(String sessionId, String nationalId) onNext;
 
   const IdScreen({
     super.key,
@@ -25,6 +27,8 @@ class IdScreen extends StatefulWidget {
 }
 
 class _IdScreenState extends State<IdScreen> {
+  bool isLoading = false;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,11 +101,61 @@ class _IdScreenState extends State<IdScreen> {
 
                     const SizedBox(height: 120),
 
-                    buildButton('التالي', () {
-                      if (widget.formKey.currentState!.validate()) {
-                        widget.onNext();
-                      }
-                    }),
+                    buildButton(
+                      isLoading ? 'جاري التحقق...' : 'التالي',
+
+                      () async {
+                        if (isLoading) return;
+
+                        if (!widget.formKey.currentState!.validate()) {
+                          return;
+                        }
+
+                        try {
+                          setState(() {
+                            isLoading = true;
+                          });
+
+                          // =========================================
+                          // START REGISTRATION
+                          // =========================================
+
+                          final response = await ApiService.startRegistration(
+                            nationalId: widget.idController.text,
+                          );
+
+                          print(response.data);
+
+                          // =========================================
+                          // GET SESSION ID
+                          // =========================================
+
+                          final sessionId = response.data["session_id"];
+
+                          print("SESSION ID: $sessionId");
+
+                          // =========================================
+                          // GO NEXT
+                          // =========================================
+
+                          widget.onNext(sessionId, widget.idController.text);
+                        } catch (e) {
+                          print("START REGISTRATION ERROR: $e");
+
+                          if (!mounted) return;
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("فشل التحقق: $e")),
+                          );
+                        } finally {
+                          if (mounted) {
+                            setState(() {
+                              isLoading = false;
+                            });
+                          }
+                        }
+                      },
+                    ),
 
                     const SizedBox(height: 16),
 
