@@ -16,7 +16,8 @@ from .serializers import (
 )
 from .services import DelegationService, RegistrationService
  
- 
+from django.db import IntegrityError
+
 # ============================================================
 # Health
 # ============================================================
@@ -95,13 +96,22 @@ def complete_registration(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    account = AccountUser.objects.create_user(
-        username=username,
-        display_name=display_name,
-        password=password,
-        phone=phone,
-        email=email,
-    )
+    try:
+        account = AccountUser.objects.create_user(
+            username=username,
+            display_name=display_name,
+            password=password,
+            phone=phone,
+            email=email,
+        )
+
+    except IntegrityError:
+        return Response(
+            {
+                "error": "Username already exists"
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     refresh = RefreshToken.for_user(account)
 
