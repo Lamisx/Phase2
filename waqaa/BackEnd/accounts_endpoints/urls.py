@@ -10,6 +10,8 @@ from .views import (
     revoke_delegation,
     start_registration,
     verify_identity,
+    generate_delegation_code,
+    accept_delegation_code,
 )
 
 app_name = "account"
@@ -25,4 +27,15 @@ urlpatterns = [
     path("delegations/",                                  list_delegations,  name="delegation-list"),
     path("delegations/create/",                           create_delegation, name="delegation-create"),
     path("delegations/<uuid:delegation_id>/revoke/",      revoke_delegation, name="delegation-revoke"),
+    path(
+    "delegations/generate-code/",
+    generate_delegation_code,
+    name="delegation-generate-code",
+    
+),
+path(
+    "delegations/accept-code/",
+    accept_delegation_code,
+    name="delegation-accept-code",
+),
 ]

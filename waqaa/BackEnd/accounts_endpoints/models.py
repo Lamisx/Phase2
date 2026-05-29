@@ -33,13 +33,13 @@ class RegistrationSession(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    national_id_hmac = models.CharField(max_length=64, db_index=True)
+    national_id_hmac = models.CharField(max_length=64, db_index=True,null=False, blank=False )
 
     username = models.CharField(max_length=20, null=True, blank=True)
-    password_hash = models.CharField(max_length=128,  null=True, blank=True)
+    password_hash = models.CharField(max_length=128,  null=False, blank=False)
     display_name = models.CharField(max_length=20, null=True, blank=True)
-    phone = models.CharField(max_length=10, null=True, blank=True)
-    email = models.EmailField()#change
+    phone = models.CharField(max_length=10, null=False, blank=False)
+    email = models.EmailField(max_length=128, null=False, blank=False, unique=True)#change
 
     status = models.CharField(
         max_length=32, choices=STATUS_CHOICES, default=STATUS_PENDING,
@@ -106,11 +106,10 @@ class AccountUser(AbstractBaseUser, PermissionsMixin):
 
     username = models.CharField(max_length=150, unique=True)
     display_name = models.CharField(max_length=200)
-    email = models.EmailField()#change
-    phone = models.CharField(max_length=20, null=True, blank=True, unique=True)
+    email = models.EmailField(max_length=128, null=False, blank=False, unique=True)#change
+    phone = models.CharField(max_length=20, null=False, blank=False, unique=True)
     national_id_hmac = models.CharField(
-        max_length=128, null=True, blank=True, unique=True,
-    )
+        max_length=128, null=False, blank=False, unique=True)
 
     status = models.CharField(
         max_length=20, default=STATUS_ACTIVE, choices=STATUS_CHOICES,
@@ -212,3 +211,37 @@ class UserDelegation(models.Model):
 
     def __str__(self):
         return f"{self.owner_account_id} → {self.delegated_account_id}"
+    
+
+
+
+class DelegationCode(models.Model):
+
+    owner_account = models.ForeignKey(
+        "accounts_endpoints.AccountUser",
+        on_delete=models.CASCADE,
+        related_name="delegation_codes",
+    )
+
+    code = models.CharField(
+        max_length=6,
+        db_index=True,
+    )
+
+    is_used = models.BooleanField(default=False)
+
+    expires_at = models.DateTimeField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "delegation_codes"
+
+        indexes = [
+            models.Index(fields=["code"]),
+            models.Index(fields=["expires_at"]),
+        ]
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at

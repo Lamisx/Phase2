@@ -14,7 +14,7 @@ class DeviceAdmin(admin.ModelAdmin):
     list_filter = ("platform", "is_active", "is_primary_device", "is_trusted")
     readonly_fields = ("id", "created_at", "updated_at")
 
-
+#
 @admin.register(DeviceKey)
 class DeviceKeyAdmin(admin.ModelAdmin):
     list_display = (

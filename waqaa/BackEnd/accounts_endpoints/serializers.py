@@ -32,6 +32,9 @@ class StartRegistrationSerializer(serializers.Serializer):
   # good 
 class CompleteRegistrationSerializer(serializers.Serializer):
     session_id = serializers.UUIDField(required=True)
+    national_id = serializers.CharField(
+        required=True,
+        max_length=10)
     username = serializers.CharField(required=True, max_length=20)
     display_name = serializers.CharField(required=True, max_length=20)
     password = serializers.CharField(required=True, write_only=True,min_length=8, max_length=128)
@@ -142,3 +145,13 @@ class CreateDelegationSerializer(serializers.Serializer):
         required=True,
     )
     expires_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+
+
+class AcceptDelegationCodeSerializer(serializers.Serializer):
+    code = serializers.CharField(
+        required=True,
+        max_length=6,
+        min_length=6,
+    )

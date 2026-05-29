@@ -9,10 +9,11 @@ from rest_framework.exceptions import (
     PermissionDenied,
     ValidationError,
 )
+import secrets 
  
 from core.utils_crypto import hash_national_id
  
-from .models import AccountUser, RegistrationSession, UserDelegation
+from .models import AccountUser, RegistrationSession, UserDelegation,DelegationCode
  
  
 # ============================================================
@@ -285,3 +286,97 @@ class DelegationService:
         )
 
 
+# ============================================================
+# DelegationCodeService
+# ============================================================
+#
+class DelegationCodeService:
+    """
+    رمز تفويض 6 أرقام بين شخصين:
+        A يولّد رمز  →  يعطيه لـ B شفهياً  →  B يدخله  →  يُنشأ UserDelegation(A→B)
+
+    قواعد:
+      - الرمز يصلح 5 دقائق فقط
+      - يُستخدم مرة واحدة (is_used)
+      - توليد رمز جديد لـ A يلغي الرموز القديمة غير المستخدمة
+      - لا يقدر المستخدم يفوّض نفسه (يُتحقّق ضمن DelegationService.create_delegation)
+    """
+
+    CODE_TTL_MINUTES = 5
+    DELEGATION_EXPIRY_DAYS = 30  # مدة صلاحية التفويض بعد القبول
+
+    @staticmethod
+    @transaction.atomic
+    def generate_for(*, owner: AccountUser):
+        """
+        A يولّد رمزاً جديداً.
+        يلغي أي رموز سابقة غير مستخدمة (عشان ما يبقى عند المستخدم رمزان نشطان).
+        """
+        # نظافة: ألغِ الرموز السابقة (غير مستخدمة) لنفس المستخدم
+        DelegationCode.objects.filter(
+            owner_account=owner,
+            is_used=False,
+        ).delete()
+
+        # توليد رمز عشوائي آمن من 6 أرقام (secrets أقوى من random لإنتاج)
+        code = f"{secrets.randbelow(1_000_000):06d}"
+
+        dcode = DelegationCode.objects.create(
+            owner_account=owner,
+            code=code,
+            expires_at=timezone.now() + timedelta(
+                minutes=DelegationCodeService.CODE_TTL_MINUTES
+            ),
+        )
+        return dcode
+
+    @staticmethod
+    @transaction.atomic
+    def accept(*, code: str, delegated: AccountUser) -> UserDelegation:
+        """
+        B يدخل الرمز:
+          - يلقى DelegationCode بهذا الرمز (لو موجود وغير منتهي وغير مستخدم)
+          - يستخدم DelegationService.create_delegation عشان ينشئ التفويض
+            (نفس المسار، نفس constraints — لا تكرار منطق)
+          - يحدّد الرمز كـ used
+        """
+        code = (code or "").strip()
+        if len(code) != 6 or not code.isdigit():
+            raise ValidationError({"code": "Invalid code format."})
+
+        # ابحث عن الرمز — قفل الصف ضد race conditions
+        try:
+            dcode = (
+                DelegationCode.objects
+                .select_for_update()
+                .select_related("owner_account")
+                .get(code=code, is_used=False)
+            )
+        except DelegationCode.DoesNotExist:
+            raise ValidationError({"code": "Invalid or already used code."})
+
+        # تحقّق من الصلاحية
+        if dcode.is_expired:
+            raise ValidationError({"code": "Code expired."})
+
+        owner = dcode.owner_account
+
+        # لا يقدر يفوّض نفسه
+        if owner.id == delegated.id:
+            raise ValidationError({"code": "Cannot accept your own code."})
+
+        # ادمج في DelegationService الموجود (نفس constraints، نفس default expiry)
+        delegation = DelegationService.create_delegation(
+            owner=owner,
+            delegated_account_id=delegated.id,
+            delegation_method=UserDelegation.METHOD_OTP,
+            expires_at=timezone.now() + timedelta(
+                days=DelegationCodeService.DELEGATION_EXPIRY_DAYS
+            ),
+        )
+
+        # علّم الرمز كمستخدم
+        dcode.is_used = True
+        dcode.save(update_fields=["is_used"])
+
+        return delegation

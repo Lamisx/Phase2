@@ -4,8 +4,15 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import AccountUser
+from .models import (
+    AccountUser,
+    DelegationCode,
+    UserDelegation,
  
+) 
+from random import randint
+from django.utils import timezone
+from datetime import timedelta
 from .serializers import (
     AccountSerializer,
     CompleteRegistrationSerializer,
@@ -13,8 +20,10 @@ from .serializers import (
     DelegationSerializer,
     LoginSerializer,
     StartRegistrationSerializer,
+    AcceptDelegationCodeSerializer,
+    DelegationSerializer,
 )
-from .services import DelegationService, RegistrationService
+from .services import DelegationService, RegistrationService,DelegationCodeService
  
  
 # ============================================================
@@ -71,37 +80,52 @@ def verify_identity(request):
 @permission_classes([AllowAny])
 def complete_registration(request):
 
-    username = request.data.get("username")
-    display_name = request.data.get("display_name")
-    password = request.data.get("password")
-    phone = request.data.get("phone")
-    email = request.data.get("email")
+    serializer = CompleteRegistrationSerializer(
+        data=request.data
+    )
 
-    if not username:
-        return Response(
-            {"username": ["This field may not be blank."]},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    serializer.is_valid(raise_exception=True)
 
-    if not display_name:
-        return Response(
-            {"display_name": ["This field may not be blank."]},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    data = serializer.validated_data
 
-    if not password:
-        return Response(
-            {"password": ["This field may not be blank."]},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    # =========================================
+    # GET NATIONAL ID
+    # =========================================
+
+    national_id = data["national_id"]
+
+    # =========================================
+    # HASH NATIONAL ID
+    # =========================================
+
+    from core.utils_crypto import hash_national_id_storage
+
+    national_id_hmac = hash_national_id_storage(
+        national_id
+    )
+
+    # =========================================
+    # CREATE ACCOUNT
+    # =========================================
 
     account = AccountUser.objects.create_user(
-        username=username,
-        display_name=display_name,
-        password=password,
-        phone=phone,
-        email=email,
+        username=data["username"],
+
+        display_name=data["display_name"],
+
+        password=data["password"],
+
+        phone=data["phone"],
+
+        email=data.get("email"),
+
+        # ✅ IMPORTANT
+        national_id_hmac=national_id_hmac,
     )
+
+    # =========================================
+    # JWT TOKENS
+    # =========================================
 
     refresh = RefreshToken.for_user(account)
 
@@ -118,7 +142,6 @@ def complete_registration(request):
         },
         status=status.HTTP_201_CREATED,
     )
- 
  
 # ============================================================
 # Login (issues JWT)
@@ -157,6 +180,30 @@ def me(request):
 # ============================================================
 # Delegation endpoints
 # ============================================================
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def generate_delegation_code(request):
+
+    DelegationCode.objects.filter(
+        owner_account=request.user,
+        is_used=False,
+    ).delete()
+
+    code = str(randint(100000, 999999))
+
+    delegation_code = DelegationCode.objects.create(
+        owner_account=request.user,
+        code=code,
+        expires_at=timezone.now() + timedelta(minutes=5),
+    )
+
+    return Response(
+        {
+            "code": delegation_code.code,
+            "expires_in": 300,
+        },
+        status=status.HTTP_201_CREATED,
+    )
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -216,4 +263,112 @@ def revoke_delegation(request, delegation_id):
         },
         status=status.HTTP_200_OK,
     )
- 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def accept_delegation_code(request):
+
+    serializer = AcceptDelegationCodeSerializer(
+        data=request.data
+    )
+
+    serializer.is_valid(raise_exception=True)
+
+    code = serializer.validated_data["code"]
+
+    try:
+        delegation_code = DelegationCode.objects.get(
+            code=code,
+            is_used=False,
+        )
+
+    except DelegationCode.DoesNotExist:
+
+        return Response(
+            {
+                "detail": "Invalid code."
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if delegation_code.is_expired:
+
+        return Response(
+            {
+                "detail": "Code expired."
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if delegation_code.owner_account == request.user:
+
+        return Response(
+            {
+                "detail": "You cannot delegate to yourself."
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    delegation_code.is_used = True
+    delegation_code.save(update_fields=["is_used"])
+
+    delegation = UserDelegation.objects.create(
+        owner_account=delegation_code.owner_account,
+        delegated_account=request.user,
+        delegation_method=UserDelegation.METHOD_OTP,
+    )
+
+    return Response(
+        {
+            "message": "Delegation created.",
+            "delegation": DelegationSerializer(
+                delegation
+            ).data,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+# ============================================================
+# Delegation Code Views
+# ============================================================
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def generate_delegation_code(request):
+    """
+    A يطلب رمز تفويض لإعطائه لـ B.
+    Response: { code: "847291", expires_in: 300, expires_at: "..." }
+    """
+    dcode = DelegationCodeService.generate_for(owner=request.user)
+    return Response(
+        {
+            "code": dcode.code,
+            "expires_in": 60 * DelegationCodeService.CODE_TTL_MINUTES,
+            "expires_at": dcode.expires_at.isoformat(),
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def accept_delegation_code(request):
+    """
+    B يُدخل الرمز الذي حصل عليه من A.
+    Body: { code: "847291" }
+    Response: تفاصيل التفويض الناتج (UserDelegation)
+    """
+    serializer = AcceptDelegationCodeSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    delegation = DelegationCodeService.accept(
+        code=serializer.validated_data["code"],
+        delegated=request.user,
+    )
+
+    return Response(
+        {
+            "message": "DELEGATION_ACCEPTED",
+            "delegation": DelegationSerializer(delegation).data,
+        },
+        status=status.HTTP_201_CREATED,
+    )
