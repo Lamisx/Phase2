@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'api_service.dart';
-import 'device_info_service.dart';
 
 import 'package:dio/dio.dart';
 

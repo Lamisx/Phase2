@@ -224,4 +224,109 @@ class ApiService {
       options: Options(headers: {"Authorization": "Bearer $accessToken"}),
     );
   }
+
+  // ============================================================
+  // ADD THESE TWO METHODS to api_service.dart
+  // (داخل class ApiService، أضيفي قبل القوس الأخير })
+  // ============================================================
+  //
+  // لا تحتاج أي استيرادات إضافية — Dio موجود أصلاً.
+  // التوكن مرفق تلقائياً في dio.options.headers بعد login.
+
+  // =====================================================
+  // GENERATE DELEGATION CODE  (A يولّد رمز لإعطائه لـ B)
+  // =====================================================
+  //
+  // Response من الباك:
+  //   { "code": "847291", "expires_in": 300, "expires_at": "..." }
+  //
+  static Future<Map<String, dynamic>> generateDelegationCode() async {
+    try {
+      final response = await dio.post("api/account/delegations/generate-code/");
+
+      if (response.statusCode == 201) {
+        return {
+          "code": response.data["code"]?.toString() ?? "",
+          "expires_in": response.data["expires_in"] ?? 300,
+          "expires_at": response.data["expires_at"]?.toString() ?? "",
+        };
+      }
+
+      throw Exception("Failed to generate code: ${response.statusCode}");
+    } catch (e) {
+      print("❌ generateDelegationCode error: $e");
+      if (e is DioException) {
+        print("STATUS: ${e.response?.statusCode}");
+        print("DATA: ${e.response?.data}");
+      }
+      rethrow;
+    }
+  }
+
+  // =====================================================
+  // ACCEPT DELEGATION CODE  (B يدخل الرمز اللي حصل عليه من A)
+  // =====================================================
+  //
+  // Response من الباك (نجاح):
+  //   {
+  //     "message": "DELEGATION_ACCEPTED",
+  //     "delegation": {
+  //       "owner_username": "rawan",
+  //       "delegated_username": "layan",
+  //       ...
+  //     }
+  //   }
+  //
+  // يُرجع owner_username (اسم الشخص اللي فوّضك) لعرضه في رسالة النجاح.
+  //
+  static Future<String> acceptDelegationCode({required String code}) async {
+    try {
+      final response = await dio.post(
+        "api/account/delegations/accept-code/",
+        data: {"code": code.trim()},
+      );
+
+      if (response.statusCode == 201) {
+        // اسم صاحب الحساب اللي فوّضك (للعرض في رسالة النجاح)
+        final ownerUsername =
+            response.data["delegation"]?["owner_username"]?.toString() ??
+            "صاحب الحساب";
+        return ownerUsername;
+      }
+
+      // أخطاء معالجة (الباك يرجّع 400 مع رسالة واضحة)
+      if (response.statusCode == 400) {
+        print("🔍 BACKEND 400 RESPONSE: ${response.data}"); // ← أضيفي هذا السطر
+        final errorMsg = _extractDelegationError(response.data);
+        throw Exception(errorMsg);
+      }
+
+      throw Exception("Failed: ${response.statusCode}");
+    } catch (e) {
+      print("❌ acceptDelegationCode error: $e");
+      if (e is DioException) {
+        print("STATUS: ${e.response?.statusCode}");
+        print("DATA: ${e.response?.data}");
+        // استخرج رسالة الخطأ من response لو موجودة
+        if (e.response?.data is Map) {
+          final msg = _extractDelegationError(e.response!.data);
+          throw Exception(msg);
+        }
+      }
+      rethrow;
+    }
+  }
+
+  // مساعدة: يستخرج رسالة الخطأ من response الباك
+  static String _extractDelegationError(dynamic data) {
+    if (data is Map) {
+      // {"code": ["Invalid or already used code."]}
+      if (data["code"] is List && (data["code"] as List).isNotEmpty) {
+        return data["code"][0].toString();
+      }
+      if (data["code"] is String) return data["code"];
+      if (data["detail"] != null) return data["detail"].toString();
+    }
+    return "رمز غير صحيح";
+  }
 }
