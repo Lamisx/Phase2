@@ -25,7 +25,8 @@ from .serializers import (
 )
 from .services import DelegationService, RegistrationService,DelegationCodeService
  
- 
+from django.db import IntegrityError
+
 # ============================================================
 # Health
 # ============================================================
