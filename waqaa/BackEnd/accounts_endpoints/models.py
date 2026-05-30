@@ -184,13 +184,13 @@ class UserDelegation(models.Model):
         constraints = [
             # لا يقدر مستخدم يفوّض نفسه — على مستوى DB
             models.CheckConstraint(
-                condition=models.Q(owner_account=models.F("delegated_account")),
+                condition=~models.Q(owner_account=models.F("delegated_account")),
                 name="udel_no_self_delegation",
             ),
             # تفويض نشط واحد فقط لكل زوج (owner, delegated)
             models.UniqueConstraint(
                 fields=["owner_account", "delegated_account"],
-                condition=models.Q(status="active"),
+                condition=~models.Q(status="active"),
                 name="udel_unique_active",
             ),
         ]
