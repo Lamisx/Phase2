@@ -1,11 +1,43 @@
 import 'package:flutter/material.dart';
-
+import '../services/api_service.dart';
+import 'package:dio/dio.dart';
 // ══════════════════════════════════════════════
 //               واجهة البروفايل
 // ══════════════════════════════════════════════
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  String displayName = "Loading...";
+  String username = "";
+  String email = "";
+  String phone = "";
+
+  @override
+  void initState() {
+    super.initState();
+    loadProfile();
+  }
+
+  Future<void> loadProfile() async {
+    try {
+      Response response = await ApiService.getMe();
+
+      setState(() {
+        displayName = response.data["display_name"] ?? "";
+        username = response.data["username"] ?? "";
+        email = response.data["email"] ?? "";
+        phone = response.data["phone"] ?? "";
+      });
+    } catch (e) {
+      debugPrint("Profile Error: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -109,14 +141,52 @@ class ProfilePage extends StatelessWidget {
                 const SizedBox(height: 48),
 
                 // ===== Name =====
-                const Text(
-                  'روان الشمسان',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
+                // ===== Name =====
+                Column(
+                  children: [
+                    Text(
+                      displayName,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Text(
+                      username,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Text(
+                      email,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Text(
+                      phone,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 28),

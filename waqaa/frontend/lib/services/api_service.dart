@@ -5,7 +5,7 @@ class ApiService {
   // BASE URL
   // =====================================================
 
-  static const String baseUrl = "http://192.168.8.97:8000/";
+  static const String baseUrl = "http://192.168.68.105:8000/";
   static String? accessToken;
 
   // =====================================================
