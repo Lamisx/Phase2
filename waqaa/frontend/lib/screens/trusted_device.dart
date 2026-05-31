@@ -5,6 +5,7 @@ import 'AddTrustDevice.dart';
 import 'linked_accounts_page.dart';
 import 'login_screen.dart';
 import '../services/device_service.dart';
+import '../services/api_service.dart';
 
 class TrustedDevicesPage extends StatefulWidget {
   const TrustedDevicesPage({super.key});
@@ -22,11 +23,37 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
     _devicesFuture = DeviceService.listDevices();
   }
 
+  void _refresh() {
+    setState(() {
+      _devicesFuture = DeviceService.listDevices();
+    });
+  }
+
+  // =====================================================================
+  // REVOKE DEVICE - يستدعى من زر الحذف في _DeviceCard
+  // =====================================================================
+  Future<void> _revokeDevice({
+    required String deviceId,
+    required String deviceName,
+  }) async {
+    final success = await DeviceService.revokeDevice(deviceId: deviceId);
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تم حذف الجهاز "$deviceName"')));
+      _refresh();
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تعذّر حذف الجهاز')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const bg = Color(0xFF2E3F47);
-    const divider = Color(0xFF3A4D55);
-    const accent = Color(0xFF22C55E);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -42,7 +69,6 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
           child: SafeArea(
             child: Column(
               children: [
-                // Header
                 Container(
                   height: 56,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -77,9 +103,7 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 14),
-
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: Column(
@@ -108,7 +132,7 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
                             MaterialPageRoute(
                               builder: (_) => const GenerateCodeScreen(),
                             ),
-                          );
+                          ).then((_) => _refresh()); // تحديث بعد الرجوع
                         },
                       ),
                       const SizedBox(height: 12),
@@ -125,7 +149,6 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
                           );
                         },
                       ),
-
                       const SizedBox(height: 12),
                       _DrawerCardItem(
                         title: "المساعدة والدعم",
@@ -143,9 +166,7 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
                     ],
                   ),
                 ),
-
                 const Spacer(),
-
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
                   child: SizedBox(
@@ -165,6 +186,11 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
                         ),
                       ),
                       onPressed: () {
+                        ApiService.accessToken = null;
+                        ApiService.dio.options.headers.remove("Authorization");
+                        print(
+                          "🚪 Logout: token cleared from memory and dio headers",
+                        );
                         Navigator.pushAndRemoveUntil(
                           context,
                           MaterialPageRoute(
@@ -228,117 +254,127 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
           ),
         ),
 
-        // =====================================================================
-        // BODY - NOW FETCHES AND DISPLAYS REAL DEVICES
-        // =====================================================================
         body: SafeArea(
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _devicesFuture,
-            builder: (context, snapshot) {
-              // LOADING STATE
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      CircularProgressIndicator(color: Color(0xFF22C55E)),
-                      SizedBox(height: 16),
-                      Text(
-                        "جاري تحميل الأجهزة...",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              // ERROR STATE
-              if (snapshot.hasError) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        color: Color(0xFFE11D48),
-                        size: 48,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        "حدث خطأ في تحميل الأجهزة",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _devicesFuture = DeviceService.listDevices();
-                          });
-                        },
-                        child: const Text("إعادة محاولة"),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              // NO DATA STATE
-              final devices = snapshot.data ?? [];
-              if (devices.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.devices_other,
-                        color: Color(0xFF22C55E),
-                        size: 48,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        "لا توجد أجهزة موثوقة",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "قم بإضافة جهاز موثوق من القائمة",
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              // DEVICES LIST
-              return Column(
-                children: [
-                  Container(height: 2, color: const Color(0xFF3A4D55)),
-                  const SizedBox(height: 14),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      itemCount: devices.length,
-                      itemBuilder: (context, index) {
-                        final device = devices[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _DeviceCard(
-                            deviceId: device["id"] ?? "unknown",
-                            deviceName: device["label"] ?? "Unknown Device",
-                            platform: device["platform"] ?? "android",
-                            isPrimary: device["is_primary_device"] ?? false,
-                            createdAt: device["created_at"] ?? "unknown",
-                            onDelete: () {
-                              // TODO: Implement delete device
-                            },
-                          ),
-                        );
-                      },
+          child: RefreshIndicator(
+            onRefresh: () async => _refresh(),
+            color: const Color(0xFF22C55E),
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _devicesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        CircularProgressIndicator(color: Color(0xFF22C55E)),
+                        SizedBox(height: 16),
+                        Text(
+                          "جاري تحميل الأجهزة...",
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              );
-            },
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: Color(0xFFE11D48),
+                          size: 48,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          "حدث خطأ في تحميل الأجهزة",
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _refresh,
+                          child: const Text("إعادة محاولة"),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final devices = snapshot.data ?? [];
+                if (devices.isEmpty) {
+                  return ListView(
+                    children: [
+                      const SizedBox(height: 100),
+                      Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(
+                              Icons.devices_other,
+                              color: Color(0xFF22C55E),
+                              size: 48,
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              "لا توجد أجهزة موثوقة",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              "قم بإضافة جهاز موثوق من القائمة",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                return Column(
+                  children: [
+                    Container(height: 2, color: const Color(0xFF3A4D55)),
+                    const SizedBox(height: 14),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        itemCount: devices.length,
+                        itemBuilder: (context, index) {
+                          final device = devices[index];
+                          final deviceId = (device["id"] ?? "").toString();
+                          final deviceName =
+                              (device["label"] ?? "Unknown Device").toString();
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _DeviceCard(
+                              deviceId: deviceId,
+                              deviceName: deviceName,
+                              platform: (device["platform"] ?? "android")
+                                  .toString(),
+                              isPrimary: device["is_primary_device"] ?? false,
+                              createdAt: (device["created_at"] ?? "unknown")
+                                  .toString(),
+                              // ============================================
+                              // التعديل المهم: ربط الحذف بالباك
+                              // ============================================
+                              onDelete: () => _revokeDevice(
+                                deviceId: deviceId,
+                                deviceName: deviceName,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -416,7 +452,7 @@ class _DeviceCardState extends State<_DeviceCard> {
   void _confirmDelete() {
     showDialog(
       context: context,
-      builder: (context) => Directionality(
+      builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: const Color(0xFF344A52),
@@ -433,7 +469,7 @@ class _DeviceCardState extends State<_DeviceCard> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(ctx),
               child: const Text(
                 'تراجع',
                 style: TextStyle(color: Colors.white70, fontSize: 14),
@@ -447,7 +483,7 @@ class _DeviceCardState extends State<_DeviceCard> {
                 ),
               ),
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(ctx);
                 widget.onDelete();
               },
               child: const Text(
@@ -466,7 +502,6 @@ class _DeviceCardState extends State<_DeviceCard> {
     const cardBg = Color(0xFF344A52);
     const accent = Color(0xFF22C55E);
 
-    // Get device icon based on platform
     IconData platformIcon = Icons.devices;
     if (widget.platform.toLowerCase() == "ios") {
       platformIcon = Icons.apple;
@@ -509,7 +544,9 @@ class _DeviceCardState extends State<_DeviceCard> {
           ),
           const SizedBox(height: 10),
           Text(
-            "Device ID: ${widget.deviceId.substring(0, 8)}...",
+            widget.deviceId.length >= 8
+                ? "Device ID: ${widget.deviceId.substring(0, 8)}..."
+                : "Device ID: ${widget.deviceId}",
             textAlign: TextAlign.right,
             style: TextStyle(
               color: Colors.white.withOpacity(0.70),

@@ -329,4 +329,77 @@ class ApiService {
     }
     return "رمز غير صحيح";
   }
+  // ============================================================
+  // ADD these methods to api_service.dart
+  // (داخل class ApiService، قبل القوس الأخير })
+  // ============================================================
+  //
+  // تستخدمان للحسابات المرتبطة:
+  //   getReceivedDelegations  → جلب التفويضات اللي استلمها المستخدم
+  //   revokeMyDelegation      → إلغاء تفويض من جانب المُفوَّض
+
+  // =====================================================
+  // GET RECEIVED DELEGATIONS  (B يجلب من فوّضوه)
+  // =====================================================
+  //
+  // Response من الباك:
+  //   {
+  //     "count": 2,
+  //     "delegations": [
+  //       {
+  //         "id": "...",
+  //         "owner_username": "rawan",
+  //         "delegated_username": "layan",
+  //         "delegated_display_name": "Layan",
+  //         "status": "active",
+  //         ...
+  //       },
+  //       ...
+  //     ]
+  //   }
+  //
+  static Future<List<Map<String, dynamic>>> getReceivedDelegations() async {
+    try {
+      final response = await dio.get("api/account/delegations/received/");
+
+      if (response.statusCode == 200) {
+        final List<dynamic> list = response.data["delegations"] ?? [];
+        return list.cast<Map<String, dynamic>>();
+      }
+
+      throw Exception("Failed: ${response.statusCode}");
+    } catch (e) {
+      print("❌ getReceivedDelegations error: $e");
+      if (e is DioException) {
+        print("STATUS: ${e.response?.statusCode}");
+        print("DATA: ${e.response?.data}");
+      }
+      rethrow;
+    }
+  }
+
+  // =====================================================
+  // REVOKE MY DELEGATION  (B يلغي تفويضه عن A)
+  // =====================================================
+  //
+  // delegationId = id من response getReceivedDelegations
+  //
+  static Future<void> revokeMyDelegation({required String delegationId}) async {
+    try {
+      final response = await dio.delete(
+        "api/account/delegations/$delegationId/revoke-as-delegated/",
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception("Failed: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("❌ revokeMyDelegation error: $e");
+      if (e is DioException) {
+        print("STATUS: ${e.response?.statusCode}");
+        print("DATA: ${e.response?.data}");
+      }
+      rethrow;
+    }
+  }
 }
