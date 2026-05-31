@@ -180,30 +180,7 @@ def me(request):
 # ============================================================
 # Delegation endpoints
 # ============================================================
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def generate_delegation_code(request):
 
-    DelegationCode.objects.filter(
-        owner_account=request.user,
-        is_used=False,
-    ).delete()
-
-    code = str(randint(100000, 999999))
-
-    delegation_code = DelegationCode.objects.create(
-        owner_account=request.user,
-        code=code,
-        expires_at=timezone.now() + timedelta(minutes=5),
-    )
-
-    return Response(
-        {
-            "code": delegation_code.code,
-            "expires_in": 300,
-        },
-        status=status.HTTP_201_CREATED,
-    )
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
