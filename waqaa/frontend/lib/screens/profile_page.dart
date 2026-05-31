@@ -100,42 +100,7 @@ class _ProfilePageState extends State<ProfilePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ===== Banner + Avatar =====
-                Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.center,
-                  children: [
-                    // Banner
-                    Container(
-                      height: 90,
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF2A4A38), Color(0xFF1E3A2E)],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                      ),
-                    ),
-                    // Avatar
-                    Positioned(
-                      bottom: -36,
-                      child: Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF3A7A52),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFF1E2E36),
-                            width: 3,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 48),
+                const SizedBox(height: 16),
 
                 // ===== Name =====
                 Padding(
