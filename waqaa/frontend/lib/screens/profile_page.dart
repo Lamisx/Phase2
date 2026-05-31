@@ -28,6 +28,8 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       Response response = await ApiService.getMe();
 
+      if (!mounted) return;
+
       setState(() {
         displayName = response.data["display_name"] ?? "";
         username = response.data["username"] ?? "";
@@ -43,8 +45,6 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     const bg = Color(0xFF1E2E36);
     const accent = Color(0xFF22C55E);
-    const cardBg = Color(0xFF2A3C44);
-    const divider = Color(0xFF3A4E57);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -70,10 +70,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   IconButton(
                     icon: const Directionality(
                       textDirection: TextDirection.ltr,
-                      child: Icon(
-                        Icons.arrow_forward,
-                        color: Color(0xFF22C55E),
-                      ),
+                      child: Icon(Icons.chevron_left, color: Color(0xFF22C55E)),
                     ),
                     onPressed: () {
                       Navigator.pop(context);
@@ -141,54 +138,69 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(height: 48),
 
                 // ===== Name =====
-                // ===== Name =====
-                Column(
-                  children: [
-                    Text(
-                      displayName,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF243841),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.green.withOpacity(0.15)),
                     ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            color: accent.withOpacity(.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.person,
+                            color: Color(0xFF22C55E),
+                            size: 45,
+                          ),
+                        ),
 
-                    const SizedBox(height: 8),
+                        const SizedBox(height: 16),
 
-                    Text(
-                      username,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
+                        Text(
+                          displayName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        _InfoTile(
+                          icon: Icons.person_outline,
+                          title: "اسم المستخدم",
+                          value: username,
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        _InfoTile(
+                          icon: Icons.email_outlined,
+                          title: "البريد الإلكتروني",
+                          value: email,
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        _InfoTile(
+                          icon: Icons.phone_outlined,
+                          title: "رقم الجوال",
+                          value: phone,
+                        ),
+                      ],
                     ),
-
-                    const SizedBox(height: 8),
-
-                    Text(
-                      email,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    Text(
-                      phone,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-
                 const SizedBox(height: 28),
 
                 // ===== Section: الحساب =====
@@ -305,6 +317,56 @@ class _SettingsCard extends StatelessWidget {
   }
 }
 
+class _InfoTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+
+  const _InfoTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2E444D),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF22C55E)),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 // ============================================================
 // Settings Row
 // ============================================================
