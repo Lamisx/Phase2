@@ -17,10 +17,28 @@ class TrustedDevicesPage extends StatefulWidget {
 class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
   late Future<List<Map<String, dynamic>>> _devicesFuture;
 
+  // اسم المستخدم الحالي — يُجلب من /me/ عند فتح الشاشة
+  String? _currentUsername;
+
   @override
   void initState() {
     super.initState();
     _devicesFuture = DeviceService.listDevices();
+    _loadCurrentUser();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    try {
+      final response = await ApiService.getMe();
+      if (response.statusCode == 200) {
+        setState(() {
+          _currentUsername = response.data["username"]?.toString();
+        });
+        print("👤 Current user: $_currentUsername");
+      }
+    } catch (e) {
+      print("⚠️ Failed to load current user: $e");
+    }
   }
 
   void _refresh() {
@@ -29,9 +47,6 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
     });
   }
 
-  // =====================================================================
-  // REVOKE DEVICE - يستدعى من زر الحذف في _DeviceCard
-  // =====================================================================
   Future<void> _revokeDevice({
     required String deviceId,
     required String deviceName,
@@ -59,7 +74,6 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: bg,
-
         drawer: Drawer(
           width: 320,
           backgroundColor: const Color(0xFF22323A),
@@ -132,7 +146,7 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
                             MaterialPageRoute(
                               builder: (_) => const GenerateCodeScreen(),
                             ),
-                          ).then((_) => _refresh()); // تحديث بعد الرجوع
+                          ).then((_) => _refresh());
                         },
                       ),
                       const SizedBox(height: 12),
@@ -188,9 +202,7 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
                       onPressed: () {
                         ApiService.accessToken = null;
                         ApiService.dio.options.headers.remove("Authorization");
-                        print(
-                          "🚪 Logout: token cleared from memory and dio headers",
-                        );
+                        print("🚪 Logout: token cleared");
                         Navigator.pushAndRemoveUntil(
                           context,
                           MaterialPageRoute(
@@ -213,7 +225,6 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
             ),
           ),
         ),
-
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: SafeArea(
@@ -253,7 +264,6 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
             ),
           ),
         ),
-
         body: SafeArea(
           child: RefreshIndicator(
             onRefresh: () async => _refresh(),
@@ -349,6 +359,19 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
                           final deviceId = (device["id"] ?? "").toString();
                           final deviceName =
                               (device["label"] ?? "Unknown Device").toString();
+
+                          // اسم صاحب الجهاز (من user_detail في الـ response)
+                          final userDetail = device["user_detail"] ?? {};
+                          final ownerUsername =
+                              userDetail["username"]?.toString() ?? "";
+                          final ownerDisplayName =
+                              userDetail["display_name"]?.toString() ?? "";
+
+                          // هل الجهاز ملكي أم لشخص فوّضته؟
+                          final isMyDevice =
+                              _currentUsername != null &&
+                              ownerUsername == _currentUsername;
+
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: _DeviceCard(
@@ -357,11 +380,9 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
                               platform: (device["platform"] ?? "android")
                                   .toString(),
                               isPrimary: device["is_primary_device"] ?? false,
-                              createdAt: (device["created_at"] ?? "unknown")
-                                  .toString(),
-                              // ============================================
-                              // التعديل المهم: ربط الحذف بالباك
-                              // ============================================
+                              ownerUsername: ownerUsername,
+                              ownerDisplayName: ownerDisplayName,
+                              isMyDevice: isMyDevice,
                               onDelete: () => _revokeDevice(
                                 deviceId: deviceId,
                                 deviceName: deviceName,
@@ -432,7 +453,9 @@ class _DeviceCard extends StatefulWidget {
   final String deviceName;
   final String platform;
   final bool isPrimary;
-  final String createdAt;
+  final String ownerUsername;
+  final String ownerDisplayName;
+  final bool isMyDevice;
   final VoidCallback onDelete;
 
   const _DeviceCard({
@@ -440,7 +463,9 @@ class _DeviceCard extends StatefulWidget {
     required this.deviceName,
     required this.platform,
     required this.isPrimary,
-    required this.createdAt,
+    required this.ownerUsername,
+    required this.ownerDisplayName,
+    required this.isMyDevice,
     required this.onDelete,
   });
 
@@ -464,7 +489,9 @@ class _DeviceCardState extends State<_DeviceCard> {
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           content: Text(
-            'هل أنت متأكد من حذف الجهاز "${widget.deviceName}"؟',
+            widget.isMyDevice
+                ? 'هل أنت متأكد من حذف الجهاز "${widget.deviceName}"؟'
+                : 'هل أنت متأكد من حذف جهاز "${widget.ownerDisplayName}"؟',
             style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
           actions: [
@@ -501,6 +528,7 @@ class _DeviceCardState extends State<_DeviceCard> {
   Widget build(BuildContext context) {
     const cardBg = Color(0xFF344A52);
     const accent = Color(0xFF22C55E);
+    const delegatedColor = Color(0xFFFFA726); // برتقالي للأجهزة المفوّضة
 
     IconData platformIcon = Icons.devices;
     if (widget.platform.toLowerCase() == "ios") {
@@ -516,11 +544,17 @@ class _DeviceCardState extends State<_DeviceCard> {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(
+          color: widget.isMyDevice
+              ? Colors.white12
+              : delegatedColor.withOpacity(0.4), // حدّ مميّز للمفوّض
+          width: widget.isMyDevice ? 1 : 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // ===== صف العنوان: أيقونة + اسم الجهاز =====
           Row(
             children: [
               Icon(
@@ -542,7 +576,35 @@ class _DeviceCardState extends State<_DeviceCard> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+
+          const SizedBox(height: 8),
+
+          // ===== صاحب الجهاز (الميزة الجديدة) =====
+          Row(
+            children: [
+              Icon(
+                widget.isMyDevice ? Icons.person : Icons.people_alt_outlined,
+                color: widget.isMyDevice ? accent : delegatedColor,
+                size: 14,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                widget.isMyDevice
+                    ? "جهازي"
+                    : "جهاز ${widget.ownerDisplayName.isNotEmpty ? widget.ownerDisplayName : widget.ownerUsername}",
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  color: widget.isMyDevice ? accent : delegatedColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Device ID مختصر
           Text(
             widget.deviceId.length >= 8
                 ? "Device ID: ${widget.deviceId.substring(0, 8)}..."
@@ -550,10 +612,13 @@ class _DeviceCardState extends State<_DeviceCard> {
             textAlign: TextAlign.right,
             style: TextStyle(
               color: Colors.white.withOpacity(0.70),
-              fontSize: 12,
+              fontSize: 11,
             ),
           ),
+
           const SizedBox(height: 10),
+
+          // ===== شارة الحالة =====
           Align(
             alignment: Alignment.centerRight,
             child: Container(
@@ -579,7 +644,10 @@ class _DeviceCardState extends State<_DeviceCard> {
               ),
             ),
           ),
+
           const SizedBox(height: 10),
+
+          // زر حذف
           Align(
             alignment: Alignment.centerLeft,
             child: GestureDetector(
