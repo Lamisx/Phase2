@@ -21,7 +21,6 @@ from .serializers import (
     LoginSerializer,
     StartRegistrationSerializer,
     AcceptDelegationCodeSerializer,
-    DelegationSerializer,
 )
 from .services import DelegationService, RegistrationService,DelegationCodeService
  
@@ -372,4 +371,49 @@ def accept_delegation_code(request):
             "delegation": DelegationSerializer(delegation).data,
         },
         status=status.HTTP_201_CREATED,
+    )
+
+# ============================================================
+# ADD these two views to accounts_endpoints/views.py
+#
+# المكان: في نهاية الملف، بعد accept_delegation_code
+# ============================================================
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_received_delegations(request):
+    """
+    GET /api/account/delegations/received/
+
+    ترجع التفويضات اللي استلمها المستخدم الحالي.
+    تُستخدم في شاشة "الحسابات المرتبطة" — B يرى من فوّضه.
+    """
+    delegations = DelegationService.list_received(delegated=request.user)
+    serializer = DelegationSerializer(delegations, many=True)
+    return Response(
+        {"count": len(serializer.data), "delegations": serializer.data},
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def revoke_my_delegation(request, delegation_id):
+    """
+    DELETE /api/account/delegations/<id>/revoke-as-delegated/
+
+    B يلغي تفويضه عن A (من جانب المُفوَّض).
+    مختلفة عن revoke_delegation التي تتطلب أن يكون الـ caller هو owner.
+    """
+    delegation = DelegationService.revoke_as_delegated(
+        delegation_id=delegation_id,
+        delegated=request.user,
+    )
+    return Response(
+        {
+            "message": "Delegation revoked.",
+            "delegation": DelegationSerializer(delegation).data,
+        },
+        status=status.HTTP_200_OK,
     )

@@ -271,6 +271,52 @@ class DelegationService:
         delegation.revoked_at = timezone.now()
         delegation.save(update_fields=["status", "revoked_at", "updated_at"])
         return delegation
+    
+    # ============================================================
+# ADD these two methods to DelegationService class
+# Location: accounts_endpoints/services.py
+#
+# أضيفي هاتين الدالتين داخل class DelegationService الموجود
+# (بعد revoke_delegation وقبل find_active_delegation مثلاً)
+# ============================================================
+
+
+    @staticmethod
+    def list_received(*, delegated: AccountUser):
+        """
+        ترجع التفويضات اللي استلمها المستخدم (هو الـ delegated).
+        تُستخدم في شاشة "الحسابات المرتبطة" — B يرى من فوّضه.
+        """
+        return (
+            UserDelegation.objects
+            .filter(delegated_account=delegated)
+            .select_related("owner_account", "delegated_account")
+            .order_by("-created_at")
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def revoke_as_delegated(*, delegation_id, delegated: AccountUser) -> UserDelegation:
+        """
+        B يلغي تفويضه عن A (من جانب المُفوَّض).
+        مختلفة عن revoke_delegation اللي تتحقّق من owner.
+        """
+        try:
+            delegation = UserDelegation.objects.select_for_update().get(id=delegation_id)
+        except UserDelegation.DoesNotExist:
+            raise NotFound("Delegation not found.")
+
+        # تحقّق إن المستخدم الحالي هو المُفوَّض (مو المُفوِّض)
+        if delegation.delegated_account_id != delegated.id:
+            raise PermissionDenied("Not the delegated account.")
+
+        if delegation.status != UserDelegation.STATUS_ACTIVE:
+            raise ValidationError({"detail": "Delegation is not active."})
+
+        delegation.status = UserDelegation.STATUS_REVOKED
+        delegation.revoked_at = timezone.now()
+        delegation.save(update_fields=["status", "revoked_at", "updated_at"])
+        return delegation
 
     @staticmethod
     def find_active_delegation(*, owner: AccountUser, delegated: AccountUser):

@@ -18,8 +18,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from organization_endpoints.models import Organization
 
 from .models import Device, DeviceKey, DeviceRevocationLog
-
-
+from accounts_endpoints.models import UserDelegation
 # ============================================================
 # DeviceService
 # ============================================================
@@ -44,12 +43,56 @@ class DeviceService:
             is_active=True,
         ).first()
 
+   # ============================================================
+# REPLACE the existing list_user_devices method in DeviceService
+# with this version.
+#
+# Location: devices_endpoints/services.py
+# ============================================================
+
     @staticmethod
     def list_user_devices(*, user):
-        """Return active devices belonging to user, newest first."""
-        return (
+        """
+        ترجع أجهزة المستخدم + أجهزة الأشخاص الذين فوّضهم.
+
+        A فوّض B → A يرى جهازه + جهاز B (في شاشة الأجهزة الموثوقة)
+        """
+        # 1) أجهزة المستخدم نفسه
+        own_device_ids = list(
             Device.objects
             .filter(user=user, is_active=True)
+            .values_list("id", flat=True)
+        )
+
+        # 2) IDs الأشخاص اللي فوّضهم المستخدم (delegations كـ owner)
+        delegated_user_ids = list(
+            UserDelegation.objects
+            .filter(
+                owner_account=user,
+                status=UserDelegation.STATUS_ACTIVE,
+            )
+            .values_list("delegated_account_id", flat=True)
+        )
+
+        # 3) أجهزة أولئك الأشخاص
+        delegated_device_ids = []
+        if delegated_user_ids:
+            delegated_device_ids = list(
+                Device.objects
+                .filter(
+                    user_id__in=delegated_user_ids,
+                    is_active=True,
+                )
+                .values_list("id", flat=True)
+            )
+
+        # 4) دمج الكل
+        all_device_ids = own_device_ids + delegated_device_ids
+
+        return (
+            Device.objects
+            .filter(id__in=all_device_ids)
+            .select_related("user")
             .order_by("-created_at")
         )
 
