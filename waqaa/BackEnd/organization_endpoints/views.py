@@ -15,7 +15,7 @@ Authenticated endpoints (X-API-Key):
     GET  /api/organization/links/list/    — list calling org's linked users
 """
 from django.db import IntegrityError
-from rest_framework import status
+from rest_framework import status, permissions
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -32,6 +32,7 @@ from .serializers import (
     OrganizationSerializer,
     OrganizationUserSerializer,
 )
+from devices_endpoints.models import Device, DeviceKey
 
 
 # ============================================================
@@ -194,4 +195,53 @@ class OrganizationUserListView(APIView):
         return Response({
             "count": links.count(),
             "links": OrganizationUserSerializer(links, many=True).data,
+        })
+    # ============================================================
+# Pending links — for mobile app to auto-generate passkeys
+# ============================================================
+class MyPendingLinksView(APIView):
+    """GET /api/organization/my-pending-links/"""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        # Get the user's active device
+        device = Device.objects.filter(user=user, is_active=True).first()
+        if device is None:
+            return Response(
+                {"detail": "No active device for this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Get all orgs this user is linked to
+        links = (
+            OrganizationUser.objects
+            .filter(user=user, status=OrganizationUser.STATUS_LINKED)
+            .select_related("organization")
+        )
+
+        # Filter to those WITHOUT an active passkey on this device
+        pending = []
+        for link in links:
+            has_key = DeviceKey.objects.filter(
+                device=device,
+                organization=link.organization,
+                key_purpose=DeviceKey.PURPOSE_AUTH,
+                is_active=True,
+            ).exists()
+
+            if not has_key:
+                pending.append({
+                    "organization_id": str(link.organization.id),
+                    "organization_name": link.organization.name,
+                    "linked_at": link.created_at.isoformat(),
+                    "external_user_ref": link.external_user_ref,
+                })
+
+        return Response({
+            "device_id": str(device.id),
+            "pending_count": len(pending),
+            "pending_links": pending,
         })

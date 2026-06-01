@@ -77,7 +77,6 @@ class LinkUserSerializer(serializers.Serializer):
     to create links in any organization.
     """
  
-    user_id = serializers.UUIDField()
     external_user_ref = serializers.CharField(max_length=255,trim_whitespace=True,)
 
     national_id_hash = serializers.CharField(
@@ -125,4 +124,29 @@ class LinkUserSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError("external_user_ref is required.")
         return value
-    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

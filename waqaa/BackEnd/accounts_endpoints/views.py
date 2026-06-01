@@ -4,15 +4,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
+import hashlib
+from core.utils_crypto import hash_national_id_storage
 from .models import (
     AccountUser,
     DelegationCode,
     UserDelegation,
  
 ) 
-from random import randint
-from django.utils import timezone
-from datetime import timedelta
 from .serializers import (
     AccountSerializer,
     CompleteRegistrationSerializer,
@@ -24,7 +23,6 @@ from .serializers import (
 )
 from .services import DelegationService, RegistrationService,DelegationCodeService
  
-from django.db import IntegrityError
 
 # ============================================================
 # Health
@@ -98,10 +96,14 @@ def complete_registration(request):
     # HASH NATIONAL ID
     # =========================================
 
-    from core.utils_crypto import hash_national_id_storage
 
+    national_id_sha256 = hashlib.sha256(
+        national_id.encode("utf-8")
+    ).hexdigest()
+
+    # الخطوة 2: HMAC مع pepper وقاء
     national_id_hmac = hash_national_id_storage(
-        national_id
+        national_id_sha256
     )
 
     # =========================================
