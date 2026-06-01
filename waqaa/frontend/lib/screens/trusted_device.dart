@@ -6,6 +6,7 @@ import 'linked_accounts_page.dart';
 import 'login_screen.dart';
 import '../services/device_service.dart';
 import '../services/api_service.dart';
+import '../services/pending_links_service.dart';
 
 class TrustedDevicesPage extends StatefulWidget {
   const TrustedDevicesPage({super.key});
@@ -25,6 +26,7 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
     super.initState();
     _devicesFuture = DeviceService.listDevices();
     _loadCurrentUser();
+    _checkPendingLinks(); // ⭐ نفحص الـ pending links تلقائياً
   }
 
   Future<void> _loadCurrentUser() async {
@@ -41,10 +43,36 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
     }
   }
 
+  /// ⭐ يفحص المؤسسات المربوطة بدون passkey ويُولّد لها passkey تلقائياً.
+  /// يُستدعى عند فتح الشاشة وبعد الـ refresh.
+  Future<void> _checkPendingLinks() async {
+    // ننتظر لحظة عشان UI يفتح أولاً
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+
+    final generated = await PendingLinksService.checkAndGeneratePasskeys();
+
+    if (generated > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("تم تفعيل $generated مؤسسة جديدة 🎉"),
+          backgroundColor: const Color(0xFF22C55E),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      // refresh قائمة الأجهزة لو تحدّثت
+      setState(() {
+        _devicesFuture = DeviceService.listDevices();
+      });
+    }
+  }
+
   void _refresh() {
     setState(() {
       _devicesFuture = DeviceService.listDevices();
     });
+    // ⭐ أعِد فحص الـ pending links عند الـ refresh
+    _checkPendingLinks();
   }
 
   Future<void> _revokeDevice({
@@ -528,7 +556,7 @@ class _DeviceCardState extends State<_DeviceCard> {
   Widget build(BuildContext context) {
     const cardBg = Color(0xFF344A52);
     const accent = Color(0xFF22C55E);
-    const delegatedColor = Color(0xFFFFA726); // برتقالي للأجهزة المفوّضة
+    const delegatedColor = Color(0xFFFFA726);
 
     IconData platformIcon = Icons.devices;
     if (widget.platform.toLowerCase() == "ios") {
@@ -547,14 +575,13 @@ class _DeviceCardState extends State<_DeviceCard> {
         border: Border.all(
           color: widget.isMyDevice
               ? Colors.white12
-              : delegatedColor.withOpacity(0.4), // حدّ مميّز للمفوّض
+              : delegatedColor.withOpacity(0.4),
           width: widget.isMyDevice ? 1 : 1.5,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ===== صف العنوان: أيقونة + اسم الجهاز =====
           Row(
             children: [
               Icon(
@@ -576,10 +603,7 @@ class _DeviceCardState extends State<_DeviceCard> {
               ),
             ],
           ),
-
           const SizedBox(height: 8),
-
-          // ===== صاحب الجهاز (الميزة الجديدة) =====
           Row(
             children: [
               Icon(
@@ -601,10 +625,7 @@ class _DeviceCardState extends State<_DeviceCard> {
               ),
             ],
           ),
-
           const SizedBox(height: 8),
-
-          // Device ID مختصر
           Text(
             widget.deviceId.length >= 8
                 ? "Device ID: ${widget.deviceId.substring(0, 8)}..."
@@ -615,10 +636,7 @@ class _DeviceCardState extends State<_DeviceCard> {
               fontSize: 11,
             ),
           ),
-
           const SizedBox(height: 10),
-
-          // ===== شارة الحالة =====
           Align(
             alignment: Alignment.centerRight,
             child: Container(
@@ -644,10 +662,7 @@ class _DeviceCardState extends State<_DeviceCard> {
               ),
             ),
           ),
-
           const SizedBox(height: 10),
-
-          // زر حذف
           Align(
             alignment: Alignment.centerLeft,
             child: GestureDetector(

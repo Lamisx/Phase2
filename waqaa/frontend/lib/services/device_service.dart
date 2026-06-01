@@ -5,13 +5,7 @@ import 'device_info_service.dart';
 
 class DeviceService {
   // =====================================================================
-  // CREATE DEVICE
-  //
-  // يستخدم DeviceInfoService.getDeviceData() عشان يجيب معرّف ثابت للجهاز
-  // (android.id أو ios.identifierForVendor) بدل timestamp متغيّر.
-  //
-  // كذا الباك idempotent: نفس الجهاز = نفس app_instance_id =
-  // نفس Device في DB، حتى لو استدعينا createDevice أكثر من مرة.
+  // CREATE DEVICE — يستخدم معرّفاً ثابتاً للجهاز (android.id)
   // =====================================================================
   static Future<String?> createDevice() async {
     try {
@@ -25,7 +19,6 @@ class DeviceService {
 
       final authHeader = "Bearer $token";
 
-      // ⭐ نستخدم معلومات الجهاز الحقيقية (معرّف ثابت)
       final info = await DeviceInfoService.getDeviceData();
       final platform = info["platform"] ?? "android";
       final label = info["label"] ?? "Unknown Device";
@@ -33,7 +26,7 @@ class DeviceService {
 
       print("📱 Platform: $platform");
       print("📱 Label: $label");
-      print("📱 app_instance_id: $appInstanceId  (ثابت لهذا الجهاز)");
+      print("📱 app_instance_id: $appInstanceId");
 
       final response = await ApiService.dio.post(
         "api/device/create/",
@@ -46,41 +39,28 @@ class DeviceService {
       );
 
       print("✅ Status: ${response.statusCode}");
-      print("✅ Response: ${response.data}");
 
-      // Case 1: جهاز جديد أُنشئ
+      // 201: Device جديد
       if (response.statusCode == 201) {
         final deviceId = response.data["device"]["id"];
         print("✅ Device created (new): $deviceId");
         return deviceId;
       }
 
-      // Case 2: الجهاز موجود مسبقاً (idempotent) — الباك يرجّع 409 + device_id
+      // 409: Device موجود مسبقاً (idempotent)
       if (response.statusCode == 409) {
-        print("ℹ️ Device already exists (409 CONFLICT) — using existing");
-        String? deviceId;
-        try {
-          deviceId = response.data["device_id"];
-        } catch (e) {
-          print("⚠️ Could not extract device_id from 409 response");
-          print("Response data: ${response.data}");
-          return null;
-        }
-        if (deviceId != null) {
-          print("✅ Using existing device: $deviceId");
-          return deviceId;
-        }
+        print("ℹ️ Device already exists — using existing");
+        final deviceId = response.data["device_id"];
+        if (deviceId != null) return deviceId;
       }
 
-      // Case 3: 200 (نادرة، لكن نتعامل معها)
+      // 200: نادر
       if (response.statusCode == 200) {
-        final deviceId = response.data["device"]["id"];
-        print("✅ Device created: $deviceId");
-        return deviceId;
+        return response.data["device"]["id"];
       }
 
       print("❌ Failed: ${response.statusCode}");
-      print("❌ Error: ${response.data}");
+      print("❌ Response: ${response.data}");
       return null;
     } catch (e) {
       print("❌ Error: $e");
@@ -100,50 +80,42 @@ class DeviceService {
       print("\n📱 Fetching devices...");
 
       final token = ApiService.accessToken;
-      if (token == null || token.isEmpty) {
-        print("❌ ERROR: Token is null!");
-        return [];
-      }
-
-      final authHeader = "Bearer $token";
+      if (token == null || token.isEmpty) return [];
 
       final response = await ApiService.dio.get(
         "api/device/me/",
-        options: Options(headers: {"Authorization": authHeader}),
+        options: Options(headers: {"Authorization": "Bearer $token"}),
       );
-
-      print("✅ Status: ${response.statusCode}");
-      print("✅ Response: ${response.data}");
 
       if (response.statusCode == 200) {
         final List<dynamic> devicesList = response.data["devices"] ?? [];
         print("✅ Fetched ${devicesList.length} devices");
         return devicesList
-            .map((device) => Map<String, dynamic>.from(device as Map))
+            .map((d) => Map<String, dynamic>.from(d as Map))
             .toList();
-      } else {
-        print("❌ Failed to fetch devices: ${response.statusCode}");
-        return [];
       }
+      return [];
     } catch (e) {
       print("❌ Error fetching devices: $e");
-      if (e is DioException) {
-        print("   Status: ${e.response?.statusCode}");
-        print("   Data: ${e.response?.data}");
-      }
       return [];
     }
   }
 
   // =====================================================================
-  // REGISTER DEVICE KEY  (passkey العام)
+  // REGISTER DEVICE KEY
+  //
+  // ⭐ organizationId الآن parameter ديناميكي
+  // (مو hardcoded). نمرّر organization المناسبة.
   // =====================================================================
   static Future<void> registerDeviceKey({
     required String deviceId,
     required String publicKey,
+    required String organizationId,
   }) async {
     try {
       print("\n🔑 Registering device key...");
+      print("   device: $deviceId");
+      print("   org: $organizationId");
 
       final token = ApiService.accessToken;
       if (token == null || token.isEmpty) {
@@ -151,17 +123,15 @@ class DeviceService {
         return;
       }
 
-      final authHeader = "Bearer $token";
-
       final response = await ApiService.dio.post(
         "api/device/keys/register-device-key/",
         data: {
           "device_id": deviceId,
-          "organization_id": "550e8400-e29b-41d4-a716-446655440000",
+          "organization_id": organizationId,
           "public_key": publicKey,
           "key_purpose": "auth",
         },
-        options: Options(headers: {"Authorization": authHeader}),
+        options: Options(headers: {"Authorization": "Bearer $token"}),
       );
 
       print("✅ Status: ${response.statusCode}");
@@ -172,6 +142,7 @@ class DeviceService {
         print("   Status: ${e.response?.statusCode}");
         print("   Data: ${e.response?.data}");
       }
+      rethrow; // نعيد رمي الخطأ عشان contact_screen يعرضها
     }
   }
 
@@ -183,26 +154,16 @@ class DeviceService {
       print("\n🗑️ Revoking device: $deviceId");
 
       final token = ApiService.accessToken;
-      if (token == null || token.isEmpty) {
-        print("❌ ERROR: Token is null!");
-        return false;
-      }
+      if (token == null || token.isEmpty) return false;
 
       final response = await ApiService.dio.post(
         "api/device/$deviceId/revoke/",
         options: Options(headers: {"Authorization": "Bearer $token"}),
       );
 
-      print("✅ Status: ${response.statusCode}");
-      print("✅ Response: ${response.data}");
-
       return response.statusCode == 200;
     } catch (e) {
-      print("❌ Error revoking device: $e");
-      if (e is DioException) {
-        print("   Status: ${e.response?.statusCode}");
-        print("   Data: ${e.response?.data}");
-      }
+      print("❌ Error: $e");
       return false;
     }
   }

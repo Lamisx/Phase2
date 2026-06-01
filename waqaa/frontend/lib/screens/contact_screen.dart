@@ -1,10 +1,25 @@
+// lib/screens/contact_screen.dart
+//
+// شاشة إكمال التسجيل في وقاء.
+//
+// عند الضغط على "تسجيل":
+//   1. إنشاء AccountUser في وقاء
+//   2. إنشاء Device على جهاز المستخدم
+//   3. ⭐ توليد ES256 keypair في Android Keystore لـ "Waqaa" (وقاء نفسه)
+//   4. تسجيل public_key في وقاء
+//
+// لاحقاً عند ربط بنك، يُولَّد passkey ثاني لذلك البنك.
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../widgets/shared_widgets.dart';
 import '../services/api_service.dart';
 import '../services/device_service.dart';
-import '../services/crypto_service.dart';
+import '../services/security_service.dart';
+
+// Organization تمثّل وقاء نفسه (passkey الأول للمستخدم)
+const String _WAQAA_SELF_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 class ContactScreen extends StatefulWidget {
   final GlobalKey<FormState> formKey;
@@ -69,9 +84,9 @@ class _ContactScreenState extends State<ContactScreen> {
                     ),
                     const SizedBox(height: 40),
 
-                    // =====================================================================
+                    // ============================================================
                     // PHONE
-                    // =====================================================================
+                    // ============================================================
                     fieldLabel('رقم الجوال'),
                     const SizedBox(height: 10),
                     TextFormField(
@@ -99,9 +114,9 @@ class _ContactScreenState extends State<ContactScreen> {
 
                     const SizedBox(height: 24),
 
-                    // =====================================================================
+                    // ============================================================
                     // EMAIL
-                    // =====================================================================
+                    // ============================================================
                     fieldLabel('البريد الالكتروني'),
                     const SizedBox(height: 10),
                     TextFormField(
@@ -114,7 +129,6 @@ class _ContactScreenState extends State<ContactScreen> {
                         if (v == null || v.isEmpty) {
                           return 'البريد الإلكتروني مطلوب';
                         }
-                        // Simple email validation
                         if (!v.contains('@')) {
                           return 'البريد الإلكتروني غير صحيح';
                         }
@@ -124,9 +138,9 @@ class _ContactScreenState extends State<ContactScreen> {
 
                     const SizedBox(height: 50),
 
-                    // =====================================================================
-                    // SUBMIT BUTTON
-                    // =====================================================================
+                    // ============================================================
+                    // SUBMIT
+                    // ============================================================
                     buildButton('تسجيل', () async {
                       if (!widget.formKey.currentState!.validate()) {
                         return;
@@ -140,19 +154,8 @@ class _ContactScreenState extends State<ContactScreen> {
                               const Center(child: CircularProgressIndicator()),
                         );
 
-                        print("\n📝 === REGISTRATION COMPLETE ===");
+                        print("\n📝 === REGISTRATION ===");
 
-                        // =====================================================================
-                        // VALIDATION
-                        // =====================================================================
-                        print("📋 Validating data...");
-                        print("   National ID: ${widget.nationalId}");
-                        print("   Session ID: ${widget.sessionId}");
-                        print("   Username: ${widget.usernameController.text}");
-                        print("   Phone: ${widget.phoneController.text}");
-                        print("   Email: ${widget.emailController.text}");
-
-                        // Check required data
                         if (widget.nationalId.isEmpty) {
                           throw Exception("National ID is empty");
                         }
@@ -160,76 +163,90 @@ class _ContactScreenState extends State<ContactScreen> {
                           throw Exception("Session ID is empty");
                         }
 
-                        // =====================================================================
-                        // STEP 1: CREATE ACCOUNT
-                        // =====================================================================
+                        // =====================================================
+                        // STEP 1: إنشاء الحساب
+                        // =====================================================
                         print("1️⃣ Creating account...");
 
-                        bool created = await ApiService.completeRegistration(
+                        final created = await ApiService.completeRegistration(
                           sessionId: widget.sessionId,
                           nationalId: widget.nationalId,
                           username: widget.usernameController.text,
                           password: widget.passwordController.text,
                           phone: widget.phoneController.text,
-                          // ✅ With country code
                           email: widget.emailController.text,
                         );
 
                         if (!created) {
                           throw Exception("Account creation failed");
                         }
+                        print("✅ Account created");
 
-                        print("✅ Account created successfully");
-
-                        // =====================================================================
-                        // STEP 2: CREATE DEVICE (happens after account creation)
-                        // =====================================================================
+                        // =====================================================
+                        // STEP 2: إنشاء Device
+                        // =====================================================
                         print("2️⃣ Creating device...");
 
                         final deviceId = await DeviceService.createDevice();
-
                         if (deviceId == null) {
                           throw Exception("Device creation failed");
                         }
+                        print("✅ Device: $deviceId");
 
-                        print("✅ Device created: $deviceId");
+                        // =====================================================
+                        // STEP 3: توليد ES256 keypair لـ "Waqaa" (وقاء نفسه)
+                        //
+                        // الـ private_key يبقى في Android Keystore
+                        // الـ public_key يُرسل لوقاء
+                        // =====================================================
+                        print(
+                          "3️⃣ Generating ES256 keypair in Keystore (Waqaa self)...",
+                        );
 
-                        // =====================================================================
-                        // STEP 3: GENERATE KEYS (happens DURING REGISTRATION)
-                        // =====================================================================
-                        print("3️⃣ Generating cryptographic keys...");
+                        final alias = SecurityService.aliasFor(
+                          deviceId: deviceId,
+                          organizationId: _WAQAA_SELF_ORG_ID,
+                        );
+                        print("   alias: $alias");
 
-                        final keys = await CryptoService.generateKeyPair();
-
-                        if (keys == null || keys["publicKey"] == null) {
-                          throw Exception("Key generation failed");
+                        // نتجنّب توليد keypair مكرّر
+                        final exists = await SecurityService.hasKey(
+                          alias: alias,
+                        );
+                        if (exists) {
+                          throw Exception(
+                            "هذا الجهاز عنده passkey مسجّل مسبقاً. "
+                            "استخدم جوال جديد أو نظّف بيانات التطبيق.",
+                          );
                         }
 
-                        print("✅ Keys generated");
+                        final publicKey = await SecurityService.generateKeyPair(
+                          alias: alias,
+                        );
+                        print("✅ Keypair generated (ES256, Keystore)");
 
-                        // =====================================================================
-                        // STEP 4: REGISTER PUBLIC KEY
-                        // =====================================================================
-                        print("4️⃣ Registering public key...");
+                        // =====================================================
+                        // STEP 4: تسجيل public_key في وقاء
+                        // =====================================================
+                        print("4️⃣ Registering public key in waqaa...");
 
                         await DeviceService.registerDeviceKey(
                           deviceId: deviceId,
-                          publicKey: keys["publicKey"]!,
+                          publicKey: publicKey,
+                          organizationId: _WAQAA_SELF_ORG_ID,
                         );
+                        print("✅ Public key registered for Waqaa");
 
-                        print("✅ Public key registered");
-
+                        print("📝 === REGISTRATION COMPLETE ===");
                         print(
-                          "📝 === REGISTRATION COMPLETE - DEVICE READY ===\n",
+                          "ℹ️ Bank-specific passkeys will be created when user links banks.\n",
                         );
 
                         if (!mounted) return;
-
                         Navigator.pop(context);
                         widget.onSubmit();
                       } catch (e) {
                         if (mounted) Navigator.pop(context);
-
                         print("❌ Registration Error: $e");
 
                         showDialog(
