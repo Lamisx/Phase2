@@ -18,6 +18,7 @@ from core.utils import get_client_ip, get_user_agent
 from organization_endpoints.authentication import OrganizationAPIKeyAuthentication
 from organization_endpoints.models import OrganizationApiKey, OrganizationUser
 from organization_endpoints.permissions import HasOrganizationAPIKey, HasScope
+from devices_endpoints.models import Device, DeviceKey
 
 from .models import AuditLog, KeyUsageLog, VerificationSession
 from .serializers import (
@@ -29,6 +30,11 @@ from .serializers import (
     VerifySignatureInputSerializer,
 )
 from .services import VerificationService, write_audit
+
+from accounts_endpoints.models import UserDelegation
+from django.utils import timezone
+from django.db.models import Q
+
 
 
 # ============================================================
@@ -55,6 +61,9 @@ class CreateSessionAndChallengeView(APIView):
     required_scope = OrganizationApiKey.SCOPE_SESSION_CREATE
 
     def post(self, request):
+        print("🔥 CREATE SESSION VIEW HIT")
+        print("REQUEST DATA =", request.data)
+
         serializer = CreateSessionInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -434,3 +443,323 @@ class KeyUsageLogListView(generics.ListAPIView):
             qs = qs.filter(result=v)
 
         return qs.order_by("-created_at")
+    
+
+    """
+ADD THIS BLOCK to verification_endpoint/views.py
+At the end of the file.
+
+Provides mobile-facing endpoints for the Waqaa app to:
+  1. Discover pending verification sessions
+  2. Submit signatures for those sessions
+
+Both endpoints use JWT auth (the same auth as /api/account/me/).
+"""
+
+# ============================================================
+# 10. MOBILE — List my pending sessions
+#     GET /api/verification/my-pending-sessions/
+# ============================================================
+class MyPendingSessionsView(APIView):
+    """Mobile endpoint — returns sessions the user can sign right now.
+
+    The mobile app polls this every few seconds. For each session returned,
+    the app:
+        1. Reads the active challenge_bytes
+        2. Signs with the device's private key (Keystore)
+        3. POSTs the signature to /verify-mobile/
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        # Find the user's active device (the device making the call)
+        device = Device.objects.filter(user=user, is_active=True).first()
+        if device is None:
+            return Response(
+                {"detail": "No active device for this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Find sessions where:
+        #   - org_user.user == this user
+        #   - status == challenge_issued (still waiting)
+        # Note: we filter by the user as primary OR as a delegate.
+        # For now we keep it simple: primary only.
+        # (Delegation polling can be added later.)
+        now = timezone.now()
+        delegators_ids = list(
+            UserDelegation.objects
+            .filter(
+                delegated_account=user,
+                status=UserDelegation.STATUS_ACTIVE,
+            )
+            .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+            .values_list("owner_account_id", flat=True)
+        )
+
+        # All user IDs we can sign for = self + delegators
+        all_user_ids = [user.id] + delegators_ids
+
+        sessions = (
+            VerificationSession.objects
+            .select_related("organization", "org_user__user")
+            .filter(
+                status=VerificationSession.Status.CHALLENGE_ISSUED,
+                org_user__user_id__in=all_user_ids,   # ← يدعم التفويض الآن
+            )
+            .order_by("-created_at")
+        )
+        pending = []
+        for s in sessions:
+            # Lazy-expire any stale sessions before returning.
+            s.update_expired_status()
+            if s.status != VerificationSession.Status.CHALLENGE_ISSUED:
+                continue
+
+            # Get the active challenge for this session
+            challenge = (
+                s.challenges
+                .filter(is_active=True, is_used=False)
+                .order_by("-attempt_number")
+                .first()
+            )
+            if challenge is None:
+                continue
+
+            # Make sure the device has a key for this org
+            has_key = DeviceKey.objects.filter(
+                device=device,
+                organization=s.organization,
+                key_purpose=DeviceKey.PURPOSE_AUTH,
+                is_active=True,
+            ).exists()
+            if not has_key:
+                # Skip — the app should generate a passkey for this org
+                # via the pending-links flow before being able to sign.
+                continue
+
+            pending.append({
+                "session_id": str(s.id),
+                "organization_id": str(s.organization.id),
+                "organization_name": s.organization.name,
+                "operation_type": s.operation_type,
+                "operation_payload": s.operation_payload_encrypted,
+                "challenge_id": str(challenge.id),
+                "challenge_bytes": challenge.challenge_bytes,
+                "challenge_expires_at": challenge.expires_at.isoformat(),
+                "session_expires_at": s.expires_at.isoformat(),
+            })
+
+        return Response({
+            "device_id": str(device.id),
+            "pending_count": len(pending),
+            "pending_sessions": pending,
+        })
+
+
+# ============================================================
+# 11. MOBILE — Verify session from mobile (signs the challenge)
+#     POST /api/verification/sessions/<id>/verify-mobile/
+# ============================================================
+class VerifySessionFromMobileView(APIView):
+    """Mobile endpoint — accepts a signature for a session.
+
+    Unlike VerifyDeviceSignatureView, this requires JWT auth.
+    The device_id is taken automatically from the user's active device.
+
+    Body: { "signature": "<base64>" }
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, session_id):
+        user = request.user
+        signature = (request.data.get("signature") or "").strip()
+
+        if not signature:
+            return Response(
+                {"detail": "signature is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Find the user's active device automatically.
+        device = Device.objects.filter(user=user, is_active=True).first()
+        if device is None:
+            return Response(
+                {"detail": "No active device for this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        client_ip = get_client_ip(request)
+        user_agent = get_user_agent(request)
+
+        # Delegate to the existing verification service.
+        # It already handles trust evaluation, challenge consumption,
+        # and decision-token issuance.
+        try:
+            session, decision_token = VerificationService.verify_signature_and_decide(
+                session_id=session_id,
+                device_id=device.id,
+                signature_b64=signature,
+            )
+        except ValueError as exc:
+            reason = str(exc)
+            write_audit(
+                session_id=session_id,
+                device_id=device.id,
+                actor_type=AuditLog.ActorType.USER,
+                actor_id=user.id,
+                action="verify_signature_mobile",
+                result=AuditLog.Result.FAIL,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                metadata={"reason": reason},
+            )
+            return Response(
+                {"detail": reason},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        write_audit(
+            organization_id=session.organization_id,
+            session_id=session.id,
+            device_id=device.id,
+            actor_type=AuditLog.ActorType.USER,
+            actor_id=user.id,
+            action="verify_signature_mobile",
+            result=(
+                AuditLog.Result.OK
+                if session.status == VerificationSession.Status.VERIFIED
+                else AuditLog.Result.FAIL
+            ),
+            ip_address=client_ip,
+            user_agent=user_agent,
+            metadata={
+                "session_status": session.status,
+                "failure_reason": session.failure_reason,
+            },
+        )
+
+        return Response({
+            "session_status": session.status,
+            "session_id": str(session.id),
+            # Note: decision_token is NOT returned to the mobile app.
+            # It's only used by the org via the regular /verify-token/ endpoint.
+        })
+    
+
+    """
+ADD this view to verification_endpoint/views.py
+At the end of the file (after VerifySessionFromMobileView).
+"""
+
+# ============================================================
+# 12. MOBILE — Reject session (device doesn't have the key)
+#     POST /api/verification/sessions/<id>/reject-mobile/
+# ============================================================
+class RejectSessionFromMobileView(APIView):
+    """Mobile endpoint — the device tells us it can't sign this session.
+
+    The mobile app calls this when:
+        - It found a pending session but doesn't have the passkey for it
+        - The user explicitly rejected the operation
+        - The operation looks suspicious (e.g. unexpected amount)
+
+    This immediately marks the session as DENIED so the bank's polling
+    stops and the user gets clear feedback.
+
+    Body: { "reason": "device_not_authorized" | "user_rejected" | "suspicious_operation" }
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, session_id):
+        user = request.user
+        reason = (request.data.get("reason") or "device_not_authorized").strip()
+
+        # Validate reason
+        ALLOWED_REASONS = [
+            "device_not_authorized",   # الـ alias مو في Keystore
+            "user_rejected",            # المستخدم ضغط رفض
+            "suspicious_operation",     # العملية مشبوهة
+        ]
+        if reason not in ALLOWED_REASONS:
+            return Response(
+                {"detail": "Invalid reason."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Find the user's active device
+        device = Device.objects.filter(user=user, is_active=True).first()
+        if device is None:
+            return Response(
+                {"detail": "No active device for this user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        client_ip = get_client_ip(request)
+        user_agent = get_user_agent(request)
+
+        # Load and validate the session
+        try:
+            session = VerificationSession.objects.get(id=session_id)
+        except VerificationSession.DoesNotExist:
+            return Response(
+                {"detail": "Session not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Only the linked user can reject
+        if session.org_user.user_id != user.id:
+            write_audit(
+                session_id=session_id,
+                device_id=device.id,
+                actor_type=AuditLog.ActorType.USER,
+                actor_id=user.id,
+                action="reject_session_mobile",
+                result=AuditLog.Result.FAIL,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                metadata={"reason": "unauthorized_user"},
+            )
+            return Response(
+                {"detail": "You are not authorized to reject this session."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Only reject if still in challenge_issued
+        if session.status != VerificationSession.Status.CHALLENGE_ISSUED:
+            return Response(
+                {"detail": "Session is not in a state that can be rejected."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Mark as denied
+        session.status = VerificationSession.Status.DENIED
+        session.failure_reason = reason
+        session.save(update_fields=["status", "failure_reason"])
+
+        write_audit(
+            organization_id=session.organization_id,
+            session_id=session.id,
+            device_id=device.id,
+            actor_type=AuditLog.ActorType.USER,
+            actor_id=user.id,
+            action="reject_session_mobile",
+            result=AuditLog.Result.OK,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            metadata={
+                "reason": reason,
+                "session_status": "denied",
+            },
+        )
+
+        return Response({
+            "session_id": str(session.id),
+            "session_status": session.status,
+            "reason": reason,
+        })

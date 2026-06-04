@@ -346,15 +346,23 @@ class VerificationService:
         expired, wrong state, no active challenge, etc).
         """
         # 1) Load + lock session
+                # 1) Load + lock session (lock only on the session table to avoid
+        # "FOR UPDATE cannot be applied to nullable side of outer join")
         try:
             session = (
                 VerificationSession.objects
-                .select_for_update()
-                .select_related("organization", "org_user", "org_user__user")
+                .select_for_update(of=("self",))
                 .get(id=session_id)
             )
         except VerificationSession.DoesNotExist:
             raise ValueError("session_not_found")
+
+                # Eager-load related rows now (without lock)
+        session = (
+                    VerificationSession.objects
+                    .select_related("organization", "org_user", "org_user__user")
+                    .get(id=session.id)
+                )
 
         if session.is_expired:
             session.update_expired_status()

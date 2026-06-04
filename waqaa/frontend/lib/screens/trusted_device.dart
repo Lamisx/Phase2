@@ -7,6 +7,7 @@ import 'login_screen.dart';
 import '../services/device_service.dart';
 import '../services/api_service.dart';
 import '../services/pending_links_service.dart';
+import '../services/background_polling_service.dart';
 
 class TrustedDevicesPage extends StatefulWidget {
   const TrustedDevicesPage({super.key});
@@ -26,7 +27,8 @@ class _TrustedDevicesPageState extends State<TrustedDevicesPage> {
     super.initState();
     _devicesFuture = DeviceService.listDevices();
     _loadCurrentUser();
-    _checkPendingLinks(); // ⭐ نفحص الـ pending links تلقائياً
+    _checkPendingLinks();
+    BackgroundPollingService.start(); // ⭐ هذا السطر مهم
   }
 
   Future<void> _loadCurrentUser() async {

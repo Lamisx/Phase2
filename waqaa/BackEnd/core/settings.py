@@ -139,10 +139,12 @@ DATABASES = {
         "PASSWORD": env("DB_PASSWORD", default="", required=not DEBUG),
         "HOST": env("DB_HOST", default="127.0.0.1"),
         "PORT": env("DB_PORT", default="5432"),
-        "CONN_MAX_AGE": env_int("DB_CONN_MAX_AGE", default=60),
-        "CONN_HEALTH_CHECKS": True,
+        'CONN_MAX_AGE': 0,           # ← أغلق فوراً بعد الـ request
+        'CONN_HEALTH_CHECKS': False, # ← لا تتحقّق
+        'OPTIONS': {
+            'connect_timeout': 5,
     }
-}
+}}
 
 
 # ============================================================
