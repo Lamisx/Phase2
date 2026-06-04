@@ -644,37 +644,38 @@ class _DeviceCardState extends State<_DeviceCard> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
-                color: widget.isPrimary
+                color: (widget.isPrimary && widget.isMyDevice)
                     ? accent.withOpacity(0.18)
+                    : !widget.isMyDevice
+                    ? delegatedColor.withOpacity(0.18)
                     : Colors.grey.withOpacity(0.18),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: widget.isPrimary
+                  color: (widget.isPrimary && widget.isMyDevice)
                       ? accent.withOpacity(0.35)
+                      : !widget.isMyDevice
+                      ? delegatedColor.withOpacity(0.35)
                       : Colors.grey.withOpacity(0.35),
                 ),
               ),
               child: Text(
-                widget.isPrimary ? "الجهاز الأساسي" : "متصل",
+                // ⭐ المنطق الجديد:
+                // 1. جهازك الأساسي → "الجهاز الأساسي"
+                // 2. جهاز مفوّض → "تفويض نشط"
+                // 3. غير ذلك → "متصل"
+                (widget.isPrimary && widget.isMyDevice)
+                    ? "الجهاز الأساسي"
+                    : !widget.isMyDevice
+                    ? "تفويض نشط"
+                    : "متصل",
                 style: TextStyle(
-                  color: widget.isPrimary ? accent : Colors.white,
+                  color: (widget.isPrimary && widget.isMyDevice)
+                      ? accent
+                      : !widget.isMyDevice
+                      ? delegatedColor
+                      : Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: GestureDetector(
-              onTap: _confirmDelete,
-              child: const Text(
-                "حذف",
-                style: TextStyle(
-                  color: Color(0xFFE11D48),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
